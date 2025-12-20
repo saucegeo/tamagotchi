@@ -109,4 +109,6 @@ void Teddie::saveToEEPROM() {
   EEPROM.write(4, energy);
   EEPROM.write(5, age);
   EEPROM.write(6, mood);
+
+  EEPROM.commit();
 }
