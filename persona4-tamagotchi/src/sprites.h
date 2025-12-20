@@ -1,24 +1,24 @@
 /*
- * Teddie.h - Header file for Teddie virtual pet class.
- * Inspired by Alegotchi, adapted for Persona 4 Teddie theme.
+ * Boyfriend.h - Header file for Boyfriend virtual pet class.
+ * Inspired by Alegotchi, adapted for Boyfriend Bot theme.
  * Created for Arduino Tamagotchi project.
  * Released into the public domain.
  */
 
-#ifndef Teddie_h  // Include guard - prevents duplicate includes
-#define Teddie_h
+#ifndef Boyfriend_h  // Include guard - prevents duplicate includes
+#define Boyfriend_h
 
 #include <EEPROM.h>  // For saving/loading pet state to non-volatile memory
 
-class Teddie {
+class Boyfriend {
 public:
-  // Constructor: Initializes Teddie with starting values
+  // Constructor: Initializes Boyfriend with starting values
   // Parameters match attributes below (use defaults if none provided)
-  Teddie(bool _sleeping = false, int _sleep = 8, int _happiness = 12, int _hunger = 0, 
+  Boyfriend(bool _sleeping = false, int _sleep = 8, int _happiness = 12, int _hunger = 0, 
          int _energy = 12, int _age = 0, int _mood = 0);
 
   // Pet attributes (public so main code can read them easily; 0-24 scale like Alegotchi)
-  bool sleeping;      // Is Teddie asleep? (true/false) - EEPROM address 0
+  bool sleeping;      // Is Boyfriend asleep? (true/false) - EEPROM address 0
   int sleep;          // Sleep needed (0-24 hours) - address 1
   int happiness;      // Happiness level (0-24) - address 2
   int hunger;         // Hunger level (0-24, increases over time) - address 3
