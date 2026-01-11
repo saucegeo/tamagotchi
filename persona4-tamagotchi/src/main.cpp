@@ -1,224 +1,153 @@
-#include <M5StickCPlus2.h> // REQUIRED for the screen
+#include <M5StickCPlus2.h>
 #include <EEPROM.h>
-#include "Boyfriend.h"     // Your Boyfriend pet class
-#include "Sprites.h"       // Your new image file
-#include "DeviceManager.h" // Hardware abstraction and game state management
-#include "MechanicsManager.h" // Mini-games and hardware interactions
+#include "Sprites.h"
+#include "DeviceManager.h"
+#include "MechanicsManager.h"
 
+// Global Objects
 Boyfriend boyfriend;
-// Create the manager and pass a pointer to your pet.
-// WHY: Manager updates happiness, checks sensors, etc., without global coupling.
 DeviceManager manager(&boyfriend);
-MechanicsManager mechanics(&boyfriend);  // NEW: Mechanics manager for mini-games 
+MechanicsManager mechanics(&boyfriend);
+
+// M5GFX Sprite for Flicker-Free Drawing
+M5Canvas canvas(&StickCP2.Display);
 
 void setup() {
     // 1. Initialize M5StickC Plus 2
     auto cfg = M5.config();
     StickCP2.begin(cfg);
     
+    // 1.5. Configure power management to prevent flickering
+    // Set LCD brightness to stable level (0-255)
+    StickCP2.Display.setBrightness(128);
+    
+    // Configure power settings
+    StickCP2.Power.setChargeCurrent(450); // Set charging current to 450mA
+    
+    // Disable power saving features that can cause flickering
+    // Keep display always powered
+    StickCP2.Display.wakeup();
+    StickCP2.Display.powerSaveOff();
+    
     // 2. Rotate Screen (1 = Landscape)
     StickCP2.Display.setRotation(1);
     
-    // 3. Initialize EEPROM (Must specify size for ESP32)
+    // 3. Initialize Sprite
+    // Allocate memory for the full screen to prevent flickering
+    canvas.createSprite(StickCP2.Display.width(), StickCP2.Display.height());
+    canvas.setColorDepth(16); // 16-bit color for better performance
+    
+    // Clear display completely before first use
+    StickCP2.Display.fillScreen(BLACK);
+    StickCP2.Display.display();
+    
+    // 4. Initialize EEPROM
     EEPROM.begin(512); 
-    
-    // 4. Set RTC Date and Time
-    // IMPORTANT: Set this to current date/time on first upload!
-    // Format: setDateTime({{year, month, day}, {hour, minute, second}})
-    // Example: December 20, 2025, 10:30:00 AM
-    // StickCP2.Rtc.setDateTime({{2025, 12, 20}, {10, 30, 0}});
-    
-    // Print current RTC date/time for debugging
-    auto rtcDate = StickCP2.Rtc.getDate();
-    auto rtcTime = StickCP2.Rtc.getTime();
-    Serial.printf("Current Date: %04d-%02d-%02d\n", 
-                  rtcDate.year, rtcDate.month, rtcDate.date);
-    Serial.printf("Current Time: %02d:%02d:%02d\n", 
-                  rtcTime.hours, rtcTime.minutes, rtcTime.seconds);
     
     // 5. Load Pet
     boyfriend.loadFromEEPROM();
     
-    // 6. Initialize DeviceManager (hardware abstraction)
+    // 6. Initialize Managers
     manager.begin();
     manager.setState(STATE_HOME);
-    
-    // 7. Initialize MechanicsManager (mini-games and mechanics)
     mechanics.begin();
+    mechanics.setSpecialDates(3, 15, 7, 20); // Customize your dates here
     
-    // 8. Set special dates (Birthday: March 15, Anniversary: July 20)
-    // CUSTOMIZE: Change these to your actual dates!
-    mechanics.setSpecialDates(3, 15, 7, 20);  // (birthMonth, birthDay, anniMonth, anniDay)
-    CHECK SPECIAL EVENTS (Date-Based) ---
-    static EventType lastEvent = EVENT_NONE;
-    static unsigned long lastEventCheck = 0;
+    // Initial Clear
+    canvas.fillScreen(BLACK);
+    canvas.pushSprite(0, 0);
     
-    // Check for special events once per minute (avoid constant RTC reads)
-    if (millis() - lastEventCheck > 60000) {
-        EventType currentEvent = mechanics.checkSpecialEvents();
-        
-        if (currentEvent != EVENT_NONE && currentEvent != lastEvent) {
-            // New special event detected!
-            StickCP2.Display.fillScreen(BLACK);
-            StickCP2.Display.setTextColor(MAGENTA, BLACK);
-            StickCP2.Display.setCursor(10, 30);
-            
-            switch (currentEvent) {
-                case EVENT_BIRTHDAY:
-                    StickCP2.Display.printf("HAPPY BIRTHDAY!");
-                    mechanics.playTune(MechanicsManager::SONG_BIRTHDAY);
-                    boyfriend.updateHappiness(10);
-                    break;
-                    
-                case EVENT_ANNIVERSARY:
-                    StickCP2.Display.printf("ANNIVERSARY!");
-                    mechanics.playTune(MechanicsManager::SONG_LOVE);
-                    boyfriend.updateHappiness(15);
-                    break;
-                    
-                case EVENT_VALENTINES:
-                    StickCP2.Display.printf("VALENTINE'S DAY!");
-                    mechanics.playTune(MechanicsManager::SONG_LOVE);
-                    boyfriend.updateHappiness(12);
-                    break;
-                    
-                default:
-                    break;
-            }
-            
-            delay(3000);
-            StickCP2.Display.fillScreen(BLACK);
-            lastEvent = currentEvent;
-        }
-        
-        lastEventCheck = millis();
-    }
-    
-    // --- 
-    // Debug info to Serial Monitor
-    Serial.println("Boyfriend Bot Started!");
+    Serial.begin(115200);
+    Serial.println("Boyfriend Bot Started with Sprite Buffer");
 }
 
 void loop() {
-    // --- LOGIC ---
+    // ====================================================================
+    // 1. UPDATE INPUTS
+    // ====================================================================
     StickCP2.update(); // Update button states
-    manager.update();  // Central place for future periodic hardware tasks
-    mechanics.update(); // NEW: Update continuous mechanics (pedometer, sleepy head)
     
+    // Simple timer for hunger (every 30 seconds)
     static unsigned long lastTimer = 0;
-    if (millis() - lastTimer > 5000) {
+    if (millis() - lastTimer > 30000) {
         boyfriend.updateHunger(1);
-        boyfriend.saveToEEPROM();
         lastTimer = millis();
     }
     
-    // --- BUTTON CONTROLS ---
-    // Button A: Play Love Meter mini-game
+    // ====================================================================
+    // 2. HANDLE ACTIONS
+    // ====================================================================
+    
+    // Button A: Happiness
     if (StickCP2.BtnA.wasPressed()) {
-        if (mechanics.playLoveMeter(5000)) {
-            // User won! Boyfriend got +10 happiness automatically
-            StickCP2.Display.fillScreen(BLACK);
-        }
+        boyfriend.updateHappiness(1);
+        StickCP2.Speaker.tone(1000, 50);
     }
     
-    // Button B (PWR): Mechanics menu
-    if (StickCP2.BtnPWR.wasPressed()) {
-        // Example: Play anime songs!
-        // Cycle through different songs on each press
-        static int songIndex = 0;
-        
-        StickCP2.Display.fillScreen(BLACK);
-        StickCP2.Display.setTextColor(CYAN, BLACK);
-        StickCP2.Display.setCursor(10, 30);
-        
-        switch (songIndex) {
-            case 0:
-                StickCP2.Display.printf("Playing:\nEvangelion!");
-                mechanics.playTune(MechanicsManager::SONG_EVA);
-                break;
-            case 1:
-                StickCP2.Display.printf("Playing:\nPokemon!");
-                mechanics.playTune(MechanicsManager::SONG_POKEMON);
-                break;
-            case 2:
-                StickCP2.Display.printf("Playing:\nTotoro!");
-                mechanics.playTune(MechanicsManager::SONG_TOTORO);
-                break;
-        }
-        
-        songIndex = (songIndex + 1) % 3;
-        StickCP2.Display.fillScreen(BLACK);
+    // Button B: Feed
+    if (StickCP2.BtnB.wasPressed()) {
+        boyfriend.updateHunger(-1);
+        if (boyfriend.hunger < 0) boyfriend.hunger = 0;
+        StickCP2.Speaker.tone(1500, 50);
     }
     
-    // Long press PWR: Get Fortune Cookie
-    static unsigned long pwrPressStart = 0;
-    if (StickCP2.BtnPWR.wasPressed()) {
-        pwrPressStart = millis();
-    }
-    if (StickCP2.BtnPWR.wasReleased()) {
-        if (millis() - pwrPressStart > 1000) {  // 1 second long-press
-            // Check Sleepy Head mode
-            if (mechanics.checkSleepyHead(3.0f)) {
-                boyfriend.updateSleeping();
-                StickCP2.Display.fillScreen(BLACK);
-                StickCP2.Display.setCursor(20, 50);
-                StickCP2.Display.printf("Zzz... Sleeping");
-                delay(2000);
-            }
-            
-            // Get Fortune Cookie
-            const char* affection = mechanics.getRandomAffection();
-            StickCP2.Display.fillScreen(BLACK);
-            StickCP2.Display.setCursor(5, 30);
-            StickCP2.Display.setTextColor(MAGENTA, BLACK);
-            StickCP2.Display.printf("%s", affection);
-            StickCP2.Speaker.tone(1500, 100);
-            delay(2000);
-            StickCP2.Display.fillScreen(BLACK);
-        }
-    }
+    // ====================================================================
+    // 3. DRAW TO SPRITE (Buffer)
+    // ====================================================================
     
-    // Continuous: Shake to Clean detection
-    if (mechanics.checkShakeToClean()) {
-        boyfriend.updateHappiness(2);
-        StickCP2.Display.fillScreen(BLACK);
-        StickCP2.Display.setCursor(20, 50);
-        StickCP2.Display.setTextColor(CYAN, BLACK);
-        StickCP2.Display.printf("Cleaned! +2 ♡");
-        delay(1000);
-        StickCP2.Display.fillScreen(BLACK);
-    }
-
-    // --- DISPLAY ---
-    // If hunger is high, show the "Eating" sprite, otherwise "Idle"
-    if (boyfriend.hunger > 10) {
-         // pushImage(x, y, width, height, data_array)
-         StickCP2.Display.pushImage(40, 30, 64, 64, teddie_eating);
-    } else {
-         StickCP2.Display.pushImage(40, 30, 64, 64, teddie_idle);
+    // always clear the sprite buffer first
+    canvas.fillScreen(BLACK);
+    
+    // Center coordinates
+    int centerX = canvas.width() / 2;
+    int centerY = canvas.height() / 2;
+    
+    // --- DRAW STATS ---
+    canvas.setTextSize(1);
+    canvas.setTextColor(GREEN, BLACK);
+    canvas.setCursor(5, 5);
+    int battPct = StickCP2.Power.getBatteryLevel();
+    canvas.printf("Batt: %d%%", battPct);
+    
+    canvas.setTextColor(WHITE, BLACK);
+    canvas.setCursor(5, 20);
+    canvas.printf("Hunger: %d", boyfriend.hunger);
+    canvas.setCursor(5, 30);
+    canvas.printf("Happy:  %d", boyfriend.happiness);
+    
+    // --- DRAW CHARACTER ---
+    // Make it bigger (radius 15 minimum) so it's clearly visible
+    // "Breathing" animation for lifelike feel
+    static float breath = 0;
+    breath += 0.1;
+    int currentRadius = 15 + sin(breath) * 2; // radius fluctuates between 13 and 17
+    
+    canvas.fillCircle(centerX, centerY, currentRadius, WHITE);
+    
+    // --- DRAW STATUS INDICATORS ---
+    if (boyfriend.sleeping) {
+        canvas.setTextColor(CYAN, BLACK);
+        canvas.setCursor(centerX + 20, centerY - 20);
+        canvas.printf("Zzz...");
+    } else if (boyfriend.hunger > 10) {
+        // Warning outline if hungry
+        canvas.drawCircle(centerX, centerY, currentRadius + 3, RED);
+        canvas.drawCircle(centerX, centerY, currentRadius + 4, RED);
     }
     
-    // Draw Stats Text
-    StickCP2.Display.setTextColor(WHITE, BLACK);
-    StickCP2.Display.setCursor(0, 0);
-    StickCP2.Display.printf("Hunger: %d  ", boyfriend.hunger);
+    // --- DRAW HELP ---
+    canvas.setTextDatum(bottom_center);
+    canvas.drawString("A: Happy  B: Feed", centerX, canvas.height() - 5);
     
-    // Show battery percent with hangover check
-    bool hungover = false;
-    int battPct = mechanics.checkBatteryHangover(&hungover);
-    StickCP2.Display.setCursor(0, 10);
-    if (hungover) {
-        StickCP2.Display.setTextColor(RED, BLACK);
-        StickCP2.Display.printf("Batt: %d%% LOW!", battPct);
-    } else {
-        StickCP2.Display.setTextColor(WHITE, BLACK);
-        StickCP2.Display.printf("Batt: %d%%   ", battPct);
-    }
+    // ====================================================================
+    // 4. PUSH TO SCREEN
+    // ====================================================================
+    canvas.pushSprite(0, 0);
     
-    // Show pedometer steps
-    StickCP2.Display.setTextColor(WHITE, BLACK);
-    StickCP2.Display.setCursor(0, 110);
-    StickCP2.Display.printf("Steps: %d  ", mechanics.getPedometer());
+    // Optimized delay to prevent flickering and power issues
+    // 50ms = 20fps which is smooth and prevents brownout
+    delay(50);
     
-    delay(100);
+    // Feed the watchdog timer to prevent reset
+    yield();
 }

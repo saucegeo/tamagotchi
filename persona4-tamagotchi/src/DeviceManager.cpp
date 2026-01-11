@@ -20,9 +20,7 @@ DeviceManager::DeviceManager(Boyfriend* pet)
 bool DeviceManager::begin() {
   // Example place to seed random or calibrate sensors later.
   // Display a small status message to confirm startup (optional).
-  StickCP2.Display.setTextColor(WHITE, BLACK);
-  StickCP2.Display.setCursor(0, 110);
-  StickCP2.Display.printf("DeviceMgr ready   ");
+  // Don't display anything to avoid interference with main display logic
   return true;
 }
 
@@ -54,9 +52,10 @@ int DeviceManager::getBatteryLevel(bool* isLow) {
   // Try vendor API for voltage if available.
   // If your library uses a different API, adapt this call accordingly.
   // (Examples in M5 libraries: StickCP2.Power.getBatteryVoltage(), or AXP192 GetBatVoltage())
-  if (StickCP2.Power.isBatteryConnected()) {
-    voltage = StickCP2.Power.getBatteryVoltage(); // Vendor API: returns volts.
-  } else {
+  voltage = StickCP2.Power.getBatteryVoltage(); // Vendor API: returns volts.
+  
+  // If voltage is very low or invalid, assume USB-only
+  if (voltage < 2.0f) {
     voltage = 3.9f; // Sensible default if not connected (e.g., USB only).
   }
 
@@ -179,7 +178,7 @@ bool DeviceManager::playMiniGame(unsigned long timeoutMs) {
   // Enter game state.
   setState(STATE_PLAYING_GAME);
 
-  // Show instructions (minimal UI).
+  // Show instructions (minimal UI) - use single display update to prevent flicker
   StickCP2.Display.fillScreen(BLACK);
   StickCP2.Display.setTextColor(YELLOW, BLACK);
   StickCP2.Display.setCursor(0, 0);
@@ -187,20 +186,32 @@ bool DeviceManager::playMiniGame(unsigned long timeoutMs) {
   StickCP2.Display.setTextColor(WHITE, BLACK);
   StickCP2.Display.setCursor(0, 20);
   StickCP2.Display.printf("Timer: %lus\n", timeoutMs / 1000);
+  StickCP2.Display.display(); // Single display update
 
   // Audible start cue.
   playTone(1000, 80);
 
   unsigned long startMs = millis();
+  unsigned long lastUpdateMs = 0; // Track last display update
+  const unsigned long updateIntervalMs = 100; // Update display every 100ms to prevent flicker
 
   // Game loop: short, sensor-driven, exits on win or timeout.
   while (millis() - startMs < timeoutMs) {
     StickCP2.update();  // Keep button & peripheral states fresh.
+    
+    unsigned long now = millis();
 
-    // Read tilt and show a tiny live indicator.
+    // Only update display periodically to prevent flickering
+    if (now - lastUpdateMs >= updateIntervalMs) {
+      // Read tilt and show a tiny live indicator.
+      int tilt = getTilt();
+      StickCP2.Display.setCursor(0, 40);
+      StickCP2.Display.printf("Tilt: %d   ", tilt);
+      lastUpdateMs = now;
+    }
+    
+    // Check win condition on every loop for responsiveness
     int tilt = getTilt();
-    StickCP2.Display.setCursor(0, 40);
-    StickCP2.Display.printf("Tilt: %d   ", tilt);
 
     // Win condition: tilt RIGHT.
     if (tilt == 1) {
@@ -213,10 +224,11 @@ bool DeviceManager::playMiniGame(unsigned long timeoutMs) {
       // See: Boyfriend::updateHappiness -> writes to EEPROM and clamps [0..24].
       boyfriend_->updateHappiness(5);
 
-      // Simple "You win!" UI.
+      // Simple "You win!" UI - single display update
       StickCP2.Display.setCursor(0, 60);
       StickCP2.Display.setTextColor(GREEN, BLACK);
       StickCP2.Display.printf("You win!        ");
+      StickCP2.Display.display();
 
       // Brief pause for feedback, then exit.
       delay(500);
@@ -230,13 +242,15 @@ bool DeviceManager::playMiniGame(unsigned long timeoutMs) {
       StickCP2.Display.setCursor(0, 60);
       StickCP2.Display.setTextColor(RED, BLACK);
       StickCP2.Display.printf("Canceled        ");
+      StickCP2.Display.display();
       delay(300);
       setState(STATE_HOME);
       return false;
     }
 
-    // Keep loop responsive.
-    delay(30);
+    // Keep loop responsive with minimal delay
+    delay(10);
+    yield(); // Feed watchdog
   }
 
   // Timeout -> lose condition.
@@ -244,6 +258,7 @@ bool DeviceManager::playMiniGame(unsigned long timeoutMs) {
   StickCP2.Display.setCursor(0, 60);
   StickCP2.Display.setTextColor(RED, BLACK);
   StickCP2.Display.printf("Time up!        ");
+  StickCP2.Display.display();
   delay(500);
 
   setState(STATE_HOME);
