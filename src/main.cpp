@@ -49,6 +49,7 @@ void setup() {
     
     // 3. Display setup
     StickCP2.Display.setBrightness(80);
+    canvas.setColorDepth(8);  // Use 8-bit color to fit in RAM (~32KB instead of ~65KB)
     canvas.createSprite(StickCP2.Display.width(), StickCP2.Display.height());
     
     // 4. EEPROM initialization
