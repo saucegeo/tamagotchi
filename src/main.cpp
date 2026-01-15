@@ -14,8 +14,19 @@ M5Canvas canvas(&StickCP2.Display);
 // ===== GLOBAL STATE (like TiMiNoo does) =====
 Boyfriend boyfriend;
 
-// Game mode state machine
-int gameMode = 0;  // 0=idle, 1=need attention, 2=feeding, 3=playing, etc.
+// ===== STATE MACHINE =====
+enum GameState {
+    STATE_IDLE,
+    STATE_EATING,
+    STATE_PLAYING,
+    STATE_SLEEPING,
+    STATE_LOVE_NOTE,
+    STATE_SICK,
+    STATE_ATTENTION_NEEDED
+};
+
+GameState currentState = STATE_IDLE;
+unsigned long stateStartTime = 0;
 int animationFrame = 0;
 unsigned long lastAnimUpdate = 0;
 
@@ -35,10 +46,6 @@ void setup() {
     auto cfg = M5.config();
     StickCP2.begin(cfg);
     StickCP2.Display.setRotation(1); // Landscape mode
-    
-    // 2. CRITICAL: Hold power on (required for M5StickC Plus 2!)
-    pinMode(4, OUTPUT);
-    digitalWrite(4, HIGH);
     
     // 3. Display setup
     StickCP2.Display.setBrightness(80);
@@ -124,7 +131,206 @@ void drawCharacter(int x, int y) {
     }
 }
 
-// ===== MAIN LOOP =====
+// ===== HELPER: Draw Stats UI =====
+void drawStats() {
+    // Battery indicator (top left)
+    canvas.setTextSize(1);
+    canvas.setTextColor(TFT_GREEN, TFT_BLACK);
+    canvas.setCursor(5, 5);
+    canvas.printf("Batt:%d%%", StickCP2.Power.getBatteryLevel());
+    
+    // Stats with progress bars
+    drawProgressBar(5, 20, 80, 8, boyfriend.hunger, 24, (boyfriend.hunger > 18) ? TFT_RED : TFT_ORANGE);
+    canvas.setTextColor(TFT_WHITE, TFT_BLACK);
+    canvas.setCursor(90, 22);
+    canvas.printf("H:%d", boyfriend.hunger);
+    
+    drawProgressBar(5, 32, 80, 8, boyfriend.happiness, 24, TFT_YELLOW);
+    canvas.setCursor(90, 34);
+    canvas.printf("Hp:%d", boyfriend.happiness);
+    
+    drawProgressBar(5, 44, 80, 8, boyfriend.energy, 24, TFT_CYAN);
+    canvas.setCursor(90, 46);
+    canvas.printf("E:%d", boyfriend.energy);
+    
+    // Notifications
+    if (boyfriend.hunger > 18) {
+        canvas.setTextColor(TFT_RED, TFT_BLACK);
+        canvas.setCursor(5, 60);
+        canvas.print("HUNGRY!");
+    } else if (boyfriend.happiness < 5) {
+        canvas.setTextColor(TFT_BLUE, TFT_BLACK);
+        canvas.setCursor(5, 60);
+        canvas.print("SAD :(");
+    } else if (boyfriend.energy < 5) {
+        canvas.setTextColor(TFT_PURPLE, TFT_BLACK);
+        canvas.setCursor(5, 60);
+        canvas.print("TIRED!");
+    }
+    
+    // Help text (bottom)
+    canvas.setTextColor(TFT_DARKGREY, TFT_BLACK);
+    canvas.setCursor(5, canvas.height() - 10);
+    canvas.print("A:Play B:Feed");
+}
+
+// ===== STATE HANDLERS =====
+void handleIdleState() {
+    int centerX = canvas.width() / 2 + 30;
+    int centerY = canvas.height() / 2 + 10;
+    drawCharacter(centerX, centerY);
+    
+    // Check for state transitions
+    if (StickCP2.BtnB.wasPressed()) {
+        currentState = STATE_EATING;
+        stateStartTime = millis();
+        boyfriend.updateHunger(-5);
+        StickCP2.Speaker.tone(1500, 50);
+    } else if (StickCP2.BtnA.wasPressed()) {
+        currentState = STATE_PLAYING;
+        stateStartTime = millis();
+        boyfriend.updateHappiness(3);
+        StickCP2.Speaker.tone(1000, 50);
+    }
+    
+    // Auto-transition to attention needed state
+    if (boyfriend.hunger > 18 || boyfriend.happiness < 5 || boyfriend.energy < 5) {
+        currentState = STATE_ATTENTION_NEEDED;
+        stateStartTime = millis();
+    }
+}
+
+void handleEatingState() {
+    int centerX = canvas.width() / 2 + 30;
+    int centerY = canvas.height() / 2 + 10;
+    
+    // Draw eating animation (larger mouth/happy face)
+    int breathOffset = 1;
+    int radius = 20 + breathOffset;
+    
+    canvas.fillCircle(centerX, centerY, radius, TFT_WHITE);
+    
+    // Happy eyes
+    canvas.drawLine(centerX - 8, centerY - 5, centerX - 4, centerY - 7, TFT_BLACK);
+    canvas.drawLine(centerX + 4, centerY - 7, centerX + 8, centerY - 5, TFT_BLACK);
+    
+    // Big smile
+    canvas.drawArc(centerX, centerY + 3, 8, 6, 180, 360, TFT_BLACK);
+    
+    // Food emoji/icon
+    canvas.fillCircle(centerX - 25, centerY - 10, 5, TFT_RED);
+    canvas.setTextColor(TFT_YELLOW, TFT_BLACK);
+    canvas.setCursor(centerX - 30, centerY + 15);
+    canvas.print("YUM!");
+    
+    // Return to idle after 2 seconds
+    if (millis() - stateStartTime > 2000) {
+        currentState = STATE_IDLE;
+    }
+}
+
+void handlePlayingState() {
+    int centerX = canvas.width() / 2 + 30;
+    int centerY = canvas.height() / 2 + 10;
+    
+    // Draw playing animation (bouncing)
+    int bounceOffset = (millis() - stateStartTime) % 500 < 250 ? -5 : 5;
+    drawCharacter(centerX, centerY + bounceOffset);
+    
+    // Draw heart particles
+    int heartOffset = (millis() - stateStartTime) / 100 % 20;
+    canvas.setTextColor(TFT_MAGENTA, TFT_BLACK);
+    canvas.setCursor(centerX - 25, centerY - heartOffset);
+    canvas.print("♥");
+    canvas.setCursor(centerX + 25, centerY - heartOffset - 5);
+    canvas.print("♥");
+    
+    // Return to idle after 2 seconds
+    if (millis() - stateStartTime > 2000) {
+        currentState = STATE_IDLE;
+    }
+}
+
+void handleSleepingState() {
+    int centerX = canvas.width() / 2 + 30;
+    int centerY = canvas.height() / 2 + 10;
+    
+    // Draw sleeping character (closed eyes)
+    int radius = 20;
+    canvas.fillCircle(centerX, centerY, radius, TFT_WHITE);
+    
+    // Closed eyes (lines)
+    canvas.drawLine(centerX - 8, centerY - 5, centerX - 4, centerY - 5, TFT_BLACK);
+    canvas.drawLine(centerX + 4, centerY - 5, centerX + 8, centerY - 5, TFT_BLACK);
+    
+    // Small mouth
+    canvas.drawLine(centerX - 3, centerY + 5, centerX + 3, centerY + 5, TFT_BLACK);
+    
+    // Zzz animation
+    int zOffset = (millis() - stateStartTime) / 500 % 3;
+    canvas.setTextColor(TFT_CYAN, TFT_BLACK);
+    canvas.setCursor(centerX + 25, centerY - 20 + zOffset * 5);
+    canvas.print("Z");
+    canvas.setCursor(centerX + 32, centerY - 15 + zOffset * 5);
+    canvas.print("z");
+    canvas.setCursor(centerX + 37, centerY - 10 + zOffset * 5);
+    canvas.print("z");
+    
+    // Wake up after 5 seconds or button press
+    if (millis() - stateStartTime > 5000 || StickCP2.BtnA.wasPressed() || StickCP2.BtnB.wasPressed()) {
+        boyfriend.updateEnergy(5);
+        currentState = STATE_IDLE;
+    }
+}
+
+void handleAttentionNeededState() {
+    int centerX = canvas.width() / 2 + 30;
+    int centerY = canvas.height() / 2 + 10;
+    
+    // Draw character with attention icon (blinking)
+    drawCharacter(centerX, centerY);
+    
+    // Blinking exclamation mark
+    if ((millis() - stateStartTime) % 1000 < 500) {
+        canvas.setTextColor(TFT_RED, TFT_BLACK);
+        canvas.setTextSize(2);
+        canvas.setCursor(centerX + 25, centerY - 20);
+        canvas.print("!");
+        canvas.setTextSize(1);
+    }
+    
+    // Return to idle after 3 seconds or when needs are met
+    if (millis() - stateStartTime > 3000 || 
+        (boyfriend.hunger <= 18 && boyfriend.happiness >= 5 && boyfriend.energy >= 5)) {
+        currentState = STATE_IDLE;
+    }
+}
+
+void handleLoveNoteState() {
+    int centerX = canvas.width() / 2 + 30;
+    int centerY = canvas.height() / 2 + 10;
+    
+    drawCharacter(centerX, centerY);
+    
+    // Draw love note/message
+    canvas.setTextColor(TFT_MAGENTA, TFT_BLACK);
+    canvas.setCursor(10, centerY - 25);
+    canvas.print("I <3 U!");
+    
+    // Floating hearts
+    int heartY = centerY - ((millis() - stateStartTime) / 50 % 30);
+    canvas.setCursor(centerX - 30, heartY);
+    canvas.print("♥");
+    canvas.setCursor(centerX + 20, heartY - 5);
+    canvas.print("♥");
+    
+    // Return to idle after 3 seconds
+    if (millis() - stateStartTime > 3000) {
+        currentState = STATE_IDLE;
+    }
+}
+
+
 void loop() {
     unsigned long now = millis();
     
@@ -153,66 +359,54 @@ void loop() {
         lastAnimUpdate = now;
     }
     
-    // === 4. BUTTON INPUT (like TiMiNoo's checkButton) ===
-    if (StickCP2.BtnA.wasPressed()) {
-        boyfriend.updateHappiness(2);
-        StickCP2.Speaker.tone(1000, 50);
-    }
-    
-    if (StickCP2.BtnB.wasPressed()) {
-        boyfriend.updateHunger(-2);
-        if (boyfriend.hunger < 0) boyfriend.hunger = 0;
-        StickCP2.Speaker.tone(1500, 50);
-    }
-    
-    // === 5. DRAW EVERYTHING (like TiMiNoo's u8g.firstPage/nextPage loop) ===
+    // === 4. CLEAR CANVAS ===
     canvas.fillScreen(TFT_BLACK);
     
-    // Battery indicator (top left)
-    canvas.setTextSize(1);
-    canvas.setTextColor(TFT_GREEN, TFT_BLACK);
-    canvas.setCursor(5, 5);
-    canvas.printf("Batt:%d%%", StickCP2.Power.getBatteryLevel());
-    
-    // Stats with progress bars
-    drawProgressBar(5, 20, 80, 8, boyfriend.hunger, 24, (boyfriend.hunger > 18) ? TFT_RED : TFT_ORANGE);
-    canvas.setTextColor(TFT_WHITE, TFT_BLACK);
-    canvas.setCursor(90, 22);
-    canvas.printf("H:%d", boyfriend.hunger);
-    
-    drawProgressBar(5, 32, 80, 8, boyfriend.happiness, 24, TFT_YELLOW);
-    canvas.setCursor(90, 34);
-    canvas.printf("Hp:%d", boyfriend.happiness);
-    
-    drawProgressBar(5, 44, 80, 8, boyfriend.energy, 24, TFT_CYAN);
-    canvas.setCursor(90, 46);
-    canvas.printf("E:%d", boyfriend.energy);
-    
-    // Character (center)
-    int centerX = canvas.width() / 2 + 30;
-    int centerY = canvas.height() / 2 + 10;
-    drawCharacter(centerX, centerY);
-    
-    // Notifications (like TiMiNoo's speech bubbles)
-    if (boyfriend.hunger > 18) {
-        canvas.setTextColor(TFT_RED, TFT_BLACK);
-        canvas.setCursor(5, 60);
-        canvas.print("HUNGRY!");
-    } else if (boyfriend.happiness < 5) {
-        canvas.setTextColor(TFT_BLUE, TFT_BLACK);
-        canvas.setCursor(5, 60);
-        canvas.print("SAD :(");
-    } else if (boyfriend.energy < 5) {
-        canvas.setTextColor(TFT_PURPLE, TFT_BLACK);
-        canvas.setCursor(5, 60);
-        canvas.print("TIRED!");
+    // === 5. STATE MACHINE ===
+    switch (currentState) {
+        case STATE_IDLE:
+            handleIdleState();
+            break;
+            
+        case STATE_EATING:
+            handleEatingState();
+            break;
+            
+        case STATE_PLAYING:
+            handlePlayingState();
+            break;
+            
+        case STATE_SLEEPING:
+            handleSleepingState();
+            break;
+            
+        case STATE_ATTENTION_NEEDED:
+            handleAttentionNeededState();
+            break;
+            
+        case STATE_LOVE_NOTE:
+            handleLoveNoteState();
+            break;
+            
+        case STATE_SICK:
+            // TODO: Implement sick state
+            drawCharacter(canvas.width() / 2 + 30, canvas.height() / 2 + 10);
+            break;
     }
     
-    // Help text (bottom)
-    canvas.setTextColor(TFT_DARKGREY, TFT_BLACK);
-    canvas.setCursor(5, canvas.height() - 10);
-    canvas.print("A:Play B:Feed");
+    // === 6. ALWAYS DRAW STATS ON TOP ===
+    drawStats();
     
-    // === 6. FRAME RATE CONTROL ===
+    // === 7. PUSH CANVAS TO DISPLAY ===
+    canvas.pushSprite(0, 0);
+    
+    // === 8. AUTO-SAVE TO EEPROM (every 60 seconds) ===
+    static unsigned long lastSave = 0;
+    if (now - lastSave > 60000) {
+        EEPROM.commit();
+        lastSave = now;
+    }
+    
+    // === 9. FRAME RATE CONTROL ===
     delay(50);  // ~20 FPS
 }
