@@ -5,7 +5,7 @@
  * Released into the public domain.
  */
 
-#include "Sprites.h"
+#include "sprites.h"
 
 // Constructor: Initialize Boyfriend with default or provided values
 Boyfriend::Boyfriend(bool _sleeping, int _sleep, int _happiness, int _hunger, 
