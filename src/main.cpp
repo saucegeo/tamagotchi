@@ -8,6 +8,9 @@
 #include <EEPROM.h>
 #include "sprites.h"
 
+// Create the sprite object (our canvas) -> reduce flickering/smoother
+M5Canvas canvas(&StickCP2.Display);
+
 // ===== GLOBAL STATE (like TiMiNoo does) =====
 Boyfriend boyfriend;
 
@@ -31,15 +34,15 @@ void setup() {
     // 1. Hardware first
     auto cfg = M5.config();
     StickCP2.begin(cfg);
+    StickCP2.Display.setRotation(1); // Landscape mode
     
-    // 2. Serial for debugging
-    Serial.begin(115200);
-    Serial.println("\n=== Boyfriend Bot Starting ===");
+    // 2. CRITICAL: Hold power on (required for M5StickC Plus 2!)
+    pinMode(4, OUTPUT);
+    digitalWrite(4, HIGH);
     
     // 3. Display setup
-    StickCP2.Display.setRotation(1);
     StickCP2.Display.setBrightness(80);
-    StickCP2.Display.fillScreen(TFT_BLACK);
+    canvas.createSprite(StickCP2.Display.width(), StickCP2.Display.height());
     
     // 4. EEPROM initialization
     EEPROM.begin(512);
@@ -48,13 +51,21 @@ void setup() {
     uint8_t magicByte = EEPROM.read(100);
     if (magicByte != 0x42) {
         // First boot! Initialize defaults
-        Serial.println("First boot - setting defaults");
         EEPROM.write(100, 0x42);  // Magic number
         EEPROM.write(0, 0);   // sleeping = false
         EEPROM.write(1, 8);   // sleep = 8
         EEPROM.write(2, 12);  // happiness = 12
         EEPROM.write(3, 0);   // hunger = 0
         EEPROM.write(4, 12);  // energy = 12
+        EEPROM.write(5, 0);   // age = 0
+        EEPROM.write(6, 0);   // mood = neutral
+        EEPROM.commit();
+    }
+    
+    // Load pet data
+    boyfriend.loadFromEEPROM();
+}
+
 // ===== HELPER: Draw Progress Bar =====
 void drawProgressBar(int x, int y, int width, int height, int value, int maxValue, uint16_t color) {
     // Outline
@@ -124,19 +135,16 @@ void loop() {
     if (now - lastHungerUpdate > HUNGER_INTERVAL) {
         boyfriend.updateHunger(1);
         lastHungerUpdate = now;
-        Serial.printf("Hunger increased to %d\n", boyfriend.hunger);
     }
     
     if (now - lastHappinessUpdate > HAPPINESS_INTERVAL) {
         boyfriend.updateHappiness(-1);
         lastHappinessUpdate = now;
-        Serial.printf("Happiness decreased to %d\n", boyfriend.happiness);
     }
     
     if (now - lastEnergyUpdate > ENERGY_INTERVAL) {
         boyfriend.updateEnergy(-1);
         lastEnergyUpdate = now;
-        Serial.printf("Energy decreased to %d\n", boyfriend.energy);
     }
     
     // === 3. UPDATE ANIMATION ===
@@ -149,77 +157,62 @@ void loop() {
     if (StickCP2.BtnA.wasPressed()) {
         boyfriend.updateHappiness(2);
         StickCP2.Speaker.tone(1000, 50);
-        Serial.println("Button A - Happiness boost!");
     }
     
     if (StickCP2.BtnB.wasPressed()) {
         boyfriend.updateHunger(-2);
         if (boyfriend.hunger < 0) boyfriend.hunger = 0;
         StickCP2.Speaker.tone(1500, 50);
-        Serial.println("Button B - Fed!");
     }
     
     // === 5. DRAW EVERYTHING (like TiMiNoo's u8g.firstPage/nextPage loop) ===
-    StickCP2.Display.fillScreen(TFT_BLACK);
+    canvas.fillScreen(TFT_BLACK);
     
     // Battery indicator (top left)
-    StickCP2.Display.setTextSize(1);
-    StickCP2.Display.setTextColor(TFT_GREEN, TFT_BLACK);
-    StickCP2.Display.setCursor(5, 5);
-    StickCP2.Display.printf("Batt:%d%%", StickCP2.Power.getBatteryLevel());
+    canvas.setTextSize(1);
+    canvas.setTextColor(TFT_GREEN, TFT_BLACK);
+    canvas.setCursor(5, 5);
+    canvas.printf("Batt:%d%%", StickCP2.Power.getBatteryLevel());
     
     // Stats with progress bars
     drawProgressBar(5, 20, 80, 8, boyfriend.hunger, 24, (boyfriend.hunger > 18) ? TFT_RED : TFT_ORANGE);
-    StickCP2.Display.setTextColor(TFT_WHITE, TFT_BLACK);
-    StickCP2.Display.setCursor(90, 22);
-    StickCP2.Display.printf("H:%d", boyfriend.hunger);
+    canvas.setTextColor(TFT_WHITE, TFT_BLACK);
+    canvas.setCursor(90, 22);
+    canvas.printf("H:%d", boyfriend.hunger);
     
     drawProgressBar(5, 32, 80, 8, boyfriend.happiness, 24, TFT_YELLOW);
-    StickCP2.Display.setCursor(90, 34);
-    StickCP2.Display.printf("Hp:%d", boyfriend.happiness);
+    canvas.setCursor(90, 34);
+    canvas.printf("Hp:%d", boyfriend.happiness);
     
     drawProgressBar(5, 44, 80, 8, boyfriend.energy, 24, TFT_CYAN);
-    StickCP2.Display.setCursor(90, 46);
-    StickCP2.Display.printf("E:%d", boyfriend.energy);
+    canvas.setCursor(90, 46);
+    canvas.printf("E:%d", boyfriend.energy);
     
     // Character (center)
-    int centerX = StickCP2.Display.width() / 2 + 30;
-    int centerY = StickCP2.Display.height() / 2 + 10;
+    int centerX = canvas.width() / 2 + 30;
+    int centerY = canvas.height() / 2 + 10;
     drawCharacter(centerX, centerY);
     
     // Notifications (like TiMiNoo's speech bubbles)
     if (boyfriend.hunger > 18) {
-        StickCP2.Display.setTextColor(TFT_RED, TFT_BLACK);
-        StickCP2.Display.setCursor(5, 60);
-        StickCP2.Display.print("HUNGRY!");
+        canvas.setTextColor(TFT_RED, TFT_BLACK);
+        canvas.setCursor(5, 60);
+        canvas.print("HUNGRY!");
     } else if (boyfriend.happiness < 5) {
-        StickCP2.Display.setTextColor(TFT_BLUE, TFT_BLACK);
-        StickCP2.Display.setCursor(5, 60);
-        StickCP2.Display.print("SAD :(");
+        canvas.setTextColor(TFT_BLUE, TFT_BLACK);
+        canvas.setCursor(5, 60);
+        canvas.print("SAD :(");
     } else if (boyfriend.energy < 5) {
-        StickCP2.Display.setTextColor(TFT_PURPLE, TFT_BLACK);
-        StickCP2.Display.setCursor(5, 60);
-        StickCP2.Display.print("TIRED!");
+        canvas.setTextColor(TFT_PURPLE, TFT_BLACK);
+        canvas.setCursor(5, 60);
+        canvas.print("TIRED!");
     }
     
     // Help text (bottom)
-    StickCP2.Display.setTextColor(TFT_DARKGREY, TFT_BLACK);
-    StickCP2.Display.setCursor(5, StickCP2.Display.height() - 10);
-    StickCP2.Display.print("A:Play B:Feed");
+    canvas.setTextColor(TFT_DARKGREY, TFT_BLACK);
+    canvas.setCursor(5, canvas.height() - 10);
+    canvas.print("A:Play B:Feed");
     
     // === 6. FRAME RATE CONTROL ===
-    StickCP2.Display.setCursor(5, 35);
-    StickCP2.Display.printf("Happy: %d", boyfriend.happiness);
-    
-    // Draw character (simple circle)
-    int centerX = StickCP2.Display.width() / 2;
-    int centerY = StickCP2.Display.height() / 2;
-    StickCP2.Display.fillCircle(centerX, centerY, 20, TFT_WHITE);
-    
-    // Draw help text
-    StickCP2.Display.setCursor(50, StickCP2.Display.height() - 15);
-    StickCP2.Display.print("A:Happy B:Feed");
-    
-    // STEP 5: Small delay at END (control frame rate, prevent watchdog timeout)
     delay(50);  // ~20 FPS
 }
