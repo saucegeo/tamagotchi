@@ -76,12 +76,12 @@ void setup() {
 // ===== HELPER: Draw Progress Bar =====
 void drawProgressBar(int x, int y, int width, int height, int value, int maxValue, uint16_t color) {
     // Outline
-    StickCP2.Display.drawRect(x, y, width, height, TFT_WHITE);
+    canvas.drawRect(x, y, width, height, TFT_WHITE);
     
     // Fill based on value
     int fillWidth = (value * (width - 2)) / maxValue;
     if (fillWidth > 0) {
-        StickCP2.Display.fillRect(x + 1, y + 1, fillWidth, height - 2, color);
+        canvas.fillRect(x + 1, y + 1, fillWidth, height - 2, color);
     }
 }
 
@@ -99,35 +99,35 @@ void drawCharacter(int x, int y) {
     int radius = 20 + breathOffset;
     
     // Body (circle)
-    StickCP2.Display.fillCircle(x, y, radius, TFT_WHITE);
+    canvas.fillCircle(x, y, radius, TFT_WHITE);
     
     // Eyes (expression based on happiness)
     int eyeY = y - 5;
     if (boyfriend.happiness > 15) {
         // Happy eyes (arcs)
-        StickCP2.Display.drawLine(x - 8, eyeY, x - 4, eyeY - 2, TFT_BLACK);
-        StickCP2.Display.drawLine(x + 4, eyeY - 2, x + 8, eyeY, TFT_BLACK);
+        canvas.drawLine(x - 8, eyeY, x - 4, eyeY - 2, TFT_BLACK);
+        canvas.drawLine(x + 4, eyeY - 2, x + 8, eyeY, TFT_BLACK);
     } else if (boyfriend.happiness < 5) {
         // Sad eyes
-        StickCP2.Display.fillCircle(x - 6, eyeY, 2, TFT_BLACK);
-        StickCP2.Display.fillCircle(x + 6, eyeY, 2, TFT_BLACK);
+        canvas.fillCircle(x - 6, eyeY, 2, TFT_BLACK);
+        canvas.fillCircle(x + 6, eyeY, 2, TFT_BLACK);
     } else {
         // Normal eyes
-        StickCP2.Display.fillCircle(x - 6, eyeY, 3, TFT_BLACK);
-        StickCP2.Display.fillCircle(x + 6, eyeY, 3, TFT_BLACK);
+        canvas.fillCircle(x - 6, eyeY, 3, TFT_BLACK);
+        canvas.fillCircle(x + 6, eyeY, 3, TFT_BLACK);
     }
     
     // Mouth
     int mouthY = y + 5;
     if (boyfriend.happiness > 15) {
         // Smile
-        StickCP2.Display.drawArc(x, mouthY - 2, 6, 4, 180, 360, TFT_BLACK);
+        canvas.drawArc(x, mouthY - 2, 6, 4, 180, 360, TFT_BLACK);
     } else if (boyfriend.happiness < 5) {
         // Frown
-        StickCP2.Display.drawArc(x, mouthY + 4, 6, 4, 0, 180, TFT_BLACK);
+        canvas.drawArc(x, mouthY + 4, 6, 4, 0, 180, TFT_BLACK);
     } else {
         // Neutral
-        StickCP2.Display.drawLine(x - 5, mouthY, x + 5, mouthY, TFT_BLACK);
+        canvas.drawLine(x - 5, mouthY, x + 5, mouthY, TFT_BLACK);
     }
 }
 
