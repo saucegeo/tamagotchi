@@ -40,6 +40,9 @@ const unsigned long HUNGER_INTERVAL = 30000;     // 30 seconds
 const unsigned long HAPPINESS_INTERVAL = 45000;  // 45 seconds
 const unsigned long ENERGY_INTERVAL = 60000;     // 60 seconds
 
+// Hardware configuration
+const int POWER_HOLD_PIN = 4;  // GPIO4 - Critical for M5StickC Plus 2 power management
+
 // ===== SETUP =====
 void setup() {
     // 1. Hardware first
@@ -47,8 +50,8 @@ void setup() {
     StickCP2.begin(cfg);
     
     // 2. CRITICAL: Hold power on (required for M5StickC Plus 2!)
-    pinMode(4, OUTPUT);
-    digitalWrite(4, HIGH);
+    pinMode(POWER_HOLD_PIN, OUTPUT);
+    digitalWrite(POWER_HOLD_PIN, HIGH);
     
     StickCP2.Display.setRotation(1); // Landscape mode
     
