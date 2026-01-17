@@ -45,6 +45,11 @@ void setup() {
     // 1. Hardware first
     auto cfg = M5.config();
     StickCP2.begin(cfg);
+    
+    // 2. CRITICAL: Hold power on (required for M5StickC Plus 2!)
+    pinMode(4, OUTPUT);
+    digitalWrite(4, HIGH);
+    
     StickCP2.Display.setRotation(1); // Landscape mode
     
     // 3. Display setup
