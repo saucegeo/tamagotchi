@@ -19,61 +19,54 @@ Boyfriend::Boyfriend(bool _sleeping, int _sleep, int _happiness, int _hunger,
   mood = _mood;
 }
 
-// Toggle sleep state and save to EEPROM
+// Toggle sleep state (no immediate EEPROM write to prevent flickering)
 void Boyfriend::updateSleeping() {
   sleeping = !sleeping;
-  EEPROM.write(0, sleeping);
 }
 
-// Update sleep need (add/subtract value) and save to EEPROM
+// Update sleep need (add/subtract value) - batched save in main loop
 void Boyfriend::updateSleep(int sleepVal) {
   sleep += sleepVal;
   // Constrain to 0-24 range
   if (sleep < 0) sleep = 0;
   if (sleep > 24) sleep = 24;
-  EEPROM.write(1, sleep);
 }
 
-// Update happiness level and save to EEPROM
+// Update happiness level - batched save in main loop
 void Boyfriend::updateHappiness(int happinessVal) {
   happiness += happinessVal;
   // Constrain to 0-24 range
   if (happiness < 0) happiness = 0;
   if (happiness > 24) happiness = 24;
-  EEPROM.write(2, happiness);
 }
 
-// Update hunger level and save to EEPROM
+// Update hunger level - batched save in main loop
 void Boyfriend::updateHunger(int hungerVal) {
   hunger += hungerVal;
   // Constrain to 0-24 range
   if (hunger < 0) hunger = 0;
   if (hunger > 24) hunger = 24;
-  EEPROM.write(3, hunger);
 }
 
-// Update energy level and save to EEPROM
+// Update energy level - batched save in main loop
 void Boyfriend::updateEnergy(int energyVal) {
   energy += energyVal;
   // Constrain to 0-24 range
   if (energy < 0) energy = 0;
   if (energy > 24) energy = 24;
-  EEPROM.write(4, energy);
 }
 
-// Increment age and save to EEPROM
+// Increment age - batched save in main loop
 void Boyfriend::updateAge() {
   age++;
-  EEPROM.write(5, age);
 }
 
-// Set mood and save to EEPROM
+// Set mood - batched save in main loop
 void Boyfriend::updateMood(int newMood) {
   // Constrain to 0-3 range (0=neutral, 1=happy, 2=excited, 3=sad)
   if (newMood < 0) newMood = 0;
   if (newMood > 3) newMood = 3;
   mood = newMood;
-  EEPROM.write(6, mood);
 }
 
 // Map attribute value to bar length for display
