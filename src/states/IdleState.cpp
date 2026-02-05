@@ -14,6 +14,7 @@ extern const unsigned long ATTENTION_COOLDOWN;
  * Auto-transitions:
  * - If stats are bad → ATTENTION_NEEDED (with 10s cooldown)
  */
+
 void handleIdleState() {
     int centerX = canvas.width() / 2 + 30;
     int centerY = canvas.height() / 2 + 10;

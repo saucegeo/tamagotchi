@@ -13,6 +13,7 @@
  * - Obstacle speed: 3 pixels/frame
  * - Collision: if player Y >= ground-10 when obstacle passes
  */
+
 void handleMinigameJump() {
     // Display score
     canvas.setTextColor(TFT_CYAN, TFT_BLACK);

@@ -84,5 +84,8 @@ void handleIdleState();
 void handleEatingState();
 void handleMinigameCatch();
 void handleMinigameJump();
+void handleFortuneCookie();
+void handleBlowCandle();
+void handleStargazing();
 
 #endif

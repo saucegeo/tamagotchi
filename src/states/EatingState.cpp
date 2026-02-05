@@ -1,4 +1,4 @@
-#include "GameState.h"
+#include "../GameState.h"
 
 /**
  * EATING STATE: Shows animation of pet eating food
@@ -6,6 +6,7 @@
  * Duration: 2 seconds
  * Auto-transition: Returns to IDLE after animation completes
  */
+
 void handleEatingState() {
     int centerX = canvas.width() / 2 + 30;
     int centerY = canvas.height() / 2 + 10;

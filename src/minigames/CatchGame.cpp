@@ -13,6 +13,7 @@
  * - Player moves at 3 pixels/frame
  * - Collision detection: within 8 pixels horizontally
  */
+
 void handleMinigameCatch() {
     // Display current score
     canvas.setTextColor(TFT_CYAN, TFT_BLACK);

@@ -88,9 +88,12 @@ const char* evangelionRTTTL = "Evangelion:d=8,o=3,b=120:8a5,8p,8c6,8p,32c#6,8d6,
 bool isMusicPlaying = false;
 int musicNoteIndex = 0;
 
+
+
 // Microphone state
 int micLevel = 0;
 int blowThreshold = 500;  // Adjust based on testing
+
 
 // Love meter state
 int heartLevel = 0;
@@ -473,40 +476,6 @@ void handleMinigameMenu() {
     }
 }
 
-// ===== NEW MECHANIC: Fortune Cookie =====
-void handleFortuneCookie() {
-    int centerX = canvas.width() / 2 + 30;
-    int centerY = canvas.height() / 2 + 10;
-    
-    canvas.setTextColor(TFT_YELLOW, TFT_BLACK);
-    canvas.setTextSize(2);
-    canvas.setCursor(10, 20);
-    canvas.print("FORTUNE");
-    canvas.setTextSize(1);
-    
-    // Display fortune message (word wrap)
-    canvas.setTextColor(TFT_WHITE, TFT_BLACK);
-    canvas.setCursor(10, 45);
-    canvas.print(fortuneMessages[fortuneIndex]);
-    
-    // Draw cookie emoji or simple icon
-    canvas.setTextColor(TFT_ORANGE, TFT_BLACK);
-    canvas.setTextSize(3);
-    canvas.setCursor(centerX, centerY + 10);
-    canvas.print("O");  // Simple cookie representation
-    canvas.setTextSize(1);
-    
-    canvas.setTextColor(TFT_DARKGREY, TFT_BLACK);
-    canvas.setCursor(10, canvas.height() - 10);
-    canvas.print("Press any button");
-    
-    if (M5.BtnA.wasPressed() || M5.BtnB.wasPressed()) {
-        boyfriend.updateHappiness(1);
-        currentState = STATE_IDLE;
-        M5.Speaker.tone(1200, 50);
-    }
-}
-
 // ===== NEW MECHANIC: Dance with Anime Music =====
 // Simple RTTTL player - this is a basic template
 void handleDanceMusic() {
@@ -554,38 +523,6 @@ void handleDanceMusic() {
     }
 }
 
-// ===== NEW MECHANIC: Stargazing =====
-void handleStargazing() {
-    // Draw stars background
-    for (int i = 0; i < 30; i++) {
-        int sx = (i * 37) % canvas.width();
-        int sy = (i * 23) % canvas.height();
-        int brightness = (millis() + i * 100) % 1000 < 500 ? TFT_WHITE : TFT_DARKGREY;
-        canvas.fillCircle(sx, sy, 1, brightness);
-    }
-    
-    // Draw character looking up
-    int centerX = canvas.width() / 2 + 30;
-    int centerY = canvas.height() / 2 + 20;
-    canvas.fillCircle(centerX, centerY, 20, TFT_WHITE);
-    canvas.fillCircle(centerX - 6, centerY - 8, 3, TFT_BLACK);
-    canvas.fillCircle(centerX + 6, centerY - 8, 3, TFT_BLACK);
-    canvas.drawLine(centerX - 3, centerY + 2, centerX + 3, centerY + 2, TFT_BLACK);
-    
-    canvas.setTextColor(TFT_CYAN, TFT_BLACK);
-    canvas.setCursor(10, 10);
-    canvas.print("So beautiful...");
-    
-    canvas.setTextColor(TFT_DARKGREY, TFT_BLACK);
-    canvas.setCursor(10, canvas.height() - 10);
-    canvas.print("Tilt down to stop");
-    
-    // Check if still tilted up
-    if (!isTiltedUp) {
-        boyfriend.updateHappiness(2);
-        currentState = STATE_IDLE;
-    }
-}
 
 // ===== NEW MECHANIC: Shake to Clean =====
 void handleShakeClean() {
@@ -635,58 +572,6 @@ void handleShakeClean() {
     
     // Exit button
     if (M5.BtnB.pressedFor(1000)) {
-        currentState = STATE_IDLE;
-    }
-}
-
-// ===== NEW MECHANIC: Blow to Cool/Wish =====
-void handleBlowCandle() {
-    int centerX = canvas.width() / 2 + 30;
-    int centerY = canvas.height() / 2 + 10;
-    
-    // Draw character
-    drawCharacter(centerX - 20, centerY + 10);
-    
-    // Draw candle flame (flickers)
-    int flameFlicker = (millis() - stateStartTime) % 200 < 100 ? 2 : 0;
-    canvas.fillRect(centerX + 20, centerY, 8, 20, TFT_BLUE);  // Candle body
-    canvas.fillCircle(centerX + 24, centerY - 5 - flameFlicker, 6, TFT_ORANGE);  // Flame
-    canvas.fillCircle(centerX + 24, centerY - 7 - flameFlicker, 3, TFT_YELLOW);  // Inner flame
-    
-    canvas.setTextColor(TFT_CYAN, TFT_BLACK);
-    canvas.setCursor(10, 10);
-    canvas.print("BLOW THE CANDLE!");
-    
-    canvas.setTextColor(TFT_WHITE, TFT_BLACK);
-    canvas.setCursor(10, 25);
-    canvas.printf("Mic: %d", micLevel);
-    
-    canvas.setTextColor(TFT_DARKGREY, TFT_BLACK);
-    canvas.setCursor(10, canvas.height() - 10);
-    canvas.print("B:Back");
-    
-    if (millis() - stateStartTime < 1000) {
-        return;  // Give player a moment before detecting
-    }
-
-    // Detect blowing (high mic level)
-    if (micLevel > blowThreshold) {
-        // Success! Candle blown out
-        canvas.fillScreen(TFT_BLACK);
-        canvas.setTextColor(TFT_YELLOW, TFT_BLACK);
-        canvas.setTextSize(2);
-        canvas.setCursor(20, 30);
-        canvas.print("WISH MADE!");
-        canvas.setTextSize(1);
-        canvas.pushSprite(0, 0);
-        
-        boyfriend.updateHappiness(4);
-        M5.Speaker.tone(2000, 200);
-        delay(2000);
-        currentState = STATE_IDLE;
-    }
-    
-    if (M5.BtnB.wasPressed()) {
         currentState = STATE_IDLE;
     }
 }
@@ -942,20 +827,23 @@ void loop() {
         case STATE_MINIGAME_RESULT:
             handleMinigameResult();
             break;
-        case STATE_FORTUNE_COOKIE:
-            handleFortuneCookie();
-            break;
         case STATE_DANCE_MUSIC:
             handleDanceMusic();
             break;
         case STATE_STARGAZING:
             handleStargazing();
             break;
-        case STATE_SHAKE_CLEAN:
-            handleShakeClean();
-            break;
+
         case STATE_BLOW_CANDLE:
             handleBlowCandle();
+            break;
+
+        case STATE_FORTUNE_COOKIE:
+            handleFortuneCookie();
+            break;
+            
+        case STATE_SHAKE_CLEAN:
+            handleShakeClean();
             break;
         case STATE_LOVE_METER:
             handleLoveMeter();
