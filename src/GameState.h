@@ -76,6 +76,7 @@ extern const int SPECIAL_DAY_COUNT;
 // ===== HELPER FUNCTIONS (UI) =====
 void drawCharacter(int x, int y, bool heartEyes = false);
 void drawStatsBar();
+void drawProgressBar(int x, int y, int width, int height, int value, int maxValue, uint16_t color);
 int checkSpecialDay(int month, int day);
 
 // ===== STATE HANDLERS =====
@@ -87,5 +88,9 @@ void handleMinigameJump();
 void handleFortuneCookie();
 void handleBlowCandle();
 void handleStargazing();
+void handleMinigameResult();
+void handleShakeClean();
+void handleDanceMusic();
+void handleLoveMeter();
 
 #endif

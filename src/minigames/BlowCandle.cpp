@@ -11,10 +11,9 @@
   */
 
 void handleBlowCandle() {
+    const int BLOW_THRESHOLD = 500;  // Mic level threshold to detect blowing
     int centerX = canvas.width() / 2 + 30;
     int centerY = canvas.height() / 2 + 10;
-    int micLevel = 0;
-    int blowThreshold = 500; // Adjust this threshold based on testing with the mic input
     
     // Draw character
     drawCharacter(centerX - 20, centerY + 10);
@@ -42,7 +41,7 @@ void handleBlowCandle() {
     }
 
     // Detect blowing (high mic level)
-    if (micLevel > blowThreshold) {
+    if (micLevel > BLOW_THRESHOLD) {
         // Success! Candle blown out
         canvas.fillScreen(TFT_BLACK);
         canvas.setTextColor(TFT_YELLOW, TFT_BLACK);

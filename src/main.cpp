@@ -4,6 +4,7 @@
  * Easy to debug, easy to extend! 
  */
 
+
 #include <M5Unified.h>
 #include <EEPROM.h>
 #include "sprites.h"
@@ -24,14 +25,12 @@ int16_t *micSamples;              // Buffer for microphone samples, pointer beca
 
 // ===== GLOBAL STATE (like TiMiNoo does) =====
 Boyfriend boyfriend;
-
-// ===== STATE MACHINE =====
 GameState currentState = STATE_IDLE;
 unsigned long stateStartTime = 0;
 int animationFrame = 0;
-unsigned long lastAnimUpdate = 0;
 
 // Timers for stat decay (like TiMiNoo's frame counters)
+unsigned long lastAnimUpdate = 0;
 unsigned long lastHungerUpdate = 0;
 unsigned long lastHappinessUpdate = 0;
 unsigned long lastEnergyUpdate = 0;
@@ -41,20 +40,7 @@ const unsigned long HUNGER_INTERVAL = 30000;     // 30 seconds
 const unsigned long HAPPINESS_INTERVAL = 45000;  // 45 seconds
 const unsigned long ENERGY_INTERVAL = 60000;     // 60 seconds
 
-// Minigame state
-int minigameSelection = 0;  // 0 = catch, 1 = jump, 2 = more options
-int playerX = 60;           // Player position
-int objectX = 0;            // Falling/moving object position
-int objectY = 0;
-int gameScore = 0;
-bool gameActive = false;
-
 // IMU/Gyro state for motion mechanics
-float accelX = 0, accelY = 0, accelZ = 0;
-float gyroX = 0, gyroY = 0, gyroZ = 0;
-bool isFlat = false;
-bool isTiltedUp = false;
-int shakeCount = 0;
 unsigned long lastShakeTime = 0;
 int stepCount = 0;
 unsigned long lastStepTime = 0;
@@ -63,50 +49,16 @@ unsigned long lastStepTime = 0;
 unsigned long lastAutoStateChange = 0;
 const unsigned long AUTO_STATE_COOLDOWN = 3000;  // 3 seconds before auto-sleep/stargazing can trigger
 
-// Prevent attention state from spamming
-unsigned long lastAttentionTime = 0;
-const unsigned long ATTENTION_COOLDOWN = 10000;  // 10 seconds before attention can trigger again
-
-// Room cleanliness state
-int roomMess = 0;  // 0-10 scale
-
-// Fortune cookie messages
-const char* fortuneMessages[] = {
-    "You look pretty today",
-    "Your smile is magic",
-    "I'm lucky to have you",
-    "You make me happy",
-    "You're amazing!",
-    "Today will be great",
-    "I believe in you",
-    "You're my sunshine"
-};
-int fortuneIndex = 0;
-
 // RTTTL music player state
 const char* evangelionRTTTL = "Evangelion:d=8,o=3,b=120:8a5,8p,8c6,8p,32c#6,8d6,32p,6c6,4d6,8d6,8g6,8f6,16e6,16d6,16p,4e6";
 bool isMusicPlaying = false;
 int musicNoteIndex = 0;
-
-
-
-// Microphone state
-int micLevel = 0;
-int blowThreshold = 500;  // Adjust based on testing
-
-
-// Love meter state
-int heartLevel = 0;
-int buttonPressCount = 0;
-unsigned long loveMeterStartTime = 0;
 
 const SpecialDay specialDays[] = {
     {2, 14, "Valentine's", "Happy Valentine's Day! I love you! ❤"},
     {2, 20, "Birthday", "Happy Birthday, my love! You're amazing!"},
     {6, 7, "Birthday", "It's my birthday! Thanks for being here!"}
 };
-
-int currentSpecialDay = -1;  // -1 = no special day, else index into specialDays[]
 
 // ===== SETUP =====
 void setup() {
@@ -182,113 +134,7 @@ void setup() {
     delay(100);
 }
 
-// ===== HELPER:  Draw Progress Bar =====
-void drawProgressBar(int x, int y, int width, int height, int value, int maxValue, uint16_t color) {
-    canvas.drawRect(x, y, width, height, TFT_WHITE);
-    int fillWidth = (value * (width - 2)) / maxValue;
-    if (fillWidth > 0) {
-        canvas.fillRect(x + 1, y + 1, fillWidth, height - 2, color);
-    }
-}
 
-// ===== HELPER:  Draw Stats UI =====
-void drawStats() {
-    canvas.setTextSize(1);
-    canvas.setTextColor(TFT_GREEN, TFT_BLACK);
-    canvas.setCursor(5, 5);
-    canvas.printf("Batt:%d%%", M5.Power.getBatteryLevel());
-    
-    drawProgressBar(5, 20, 80, 8, boyfriend.hunger, 24, (boyfriend.hunger > 18) ? TFT_RED : TFT_ORANGE);
-    canvas.setTextColor(TFT_WHITE, TFT_BLACK);
-    canvas.setCursor(90, 22);
-    canvas.printf("H:%d", boyfriend.hunger);
-    
-    drawProgressBar(5, 32, 80, 8, boyfriend.happiness, 24, TFT_YELLOW);
-    canvas.setCursor(90, 34);
-    canvas.printf("Hp:%d", boyfriend.happiness);
-    
-    drawProgressBar(5, 44, 80, 8, boyfriend.energy, 24, TFT_CYAN);
-    canvas.setCursor(90, 46);
-    canvas.printf("E:%d", boyfriend.energy);
-    
-    // Show status messages or special day banner
-    if (currentSpecialDay >= 0) {
-        // Special day banner!
-        canvas.setTextColor(TFT_RED, TFT_BLACK);
-        canvas.setCursor(5, 60);
-        canvas.print(specialDays[currentSpecialDay].name);
-    } else if (boyfriend.hunger > 18) {
-        canvas.setTextColor(TFT_RED, TFT_BLACK);
-        canvas.setCursor(5, 60);
-        canvas.print("HUNGRY!");
-    } else if (boyfriend.happiness < 5) {
-        canvas.setTextColor(TFT_BLUE, TFT_BLACK);
-        canvas.setCursor(5, 60);
-        canvas.print("SAD :(");
-    } else if (boyfriend.energy < 5) {
-        canvas.setTextColor(TFT_PURPLE, TFT_BLACK);
-        canvas.setCursor(5, 60);
-        canvas.print("TIRED!");
-    }
-    
-    canvas.setTextColor(TFT_DARKGREY, TFT_BLACK);
-    canvas.setCursor(5, canvas.height() - 10);
-    canvas.print("A:Menu B:Feed");
-}
-
-// ===== HELPER: Draw Character =====
-void drawCharacter(int x, int y, bool heartEyes) {
-    // Breathing animation
-    int breathOffset = 0;
-    switch (animationFrame % 4) {
-        case 0: breathOffset = 0; break;
-        case 1: breathOffset = 1; break;
-        case 2: breathOffset = 2; break;
-        case 3: breathOffset = 1; break;
-    }
-    
-    int radius = 20 + breathOffset;
-    
-    // Body (circle)
-    canvas.fillCircle(x, y, radius, TFT_WHITE);
-    
-    // Eyes (expression based on happiness or heartEyes override)
-    int eyeY = y - 5;
-    if (heartEyes) {
-        // Heart eyes! ♥
-        canvas.setTextColor(TFT_RED, TFT_WHITE);
-        canvas.setTextSize(1);
-        canvas.setCursor(x - 8, eyeY - 3);
-        canvas.print("♥");
-        canvas.setCursor(x + 2, eyeY - 3);
-        canvas.print("♥");
-    } else if (boyfriend.happiness > 15) {
-        // Happy eyes (arcs)
-        canvas.drawLine(x - 8, eyeY, x - 4, eyeY - 2, TFT_BLACK);
-        canvas.drawLine(x + 4, eyeY - 2, x + 8, eyeY, TFT_BLACK);
-    } else if (boyfriend.happiness < 5) {
-        // Sad eyes
-        canvas.fillCircle(x - 6, eyeY, 2, TFT_BLACK);
-        canvas.fillCircle(x + 6, eyeY, 2, TFT_BLACK);
-    } else {
-        // Normal eyes
-        canvas.fillCircle(x - 6, eyeY, 3, TFT_BLACK);
-        canvas.fillCircle(x + 6, eyeY, 3, TFT_BLACK);
-    }
-    
-    // Mouth
-    int mouthY = y + 5;
-    if (boyfriend.happiness > 15) {
-        // Smile
-        canvas.drawArc(x, mouthY - 2, 6, 4, 180, 360, TFT_BLACK);
-    } else if (boyfriend.happiness < 5) {
-        // Frown
-        canvas.drawArc(x, mouthY + 4, 6, 4, 0, 180, TFT_BLACK);
-    } else {
-        // Neutral
-        canvas.drawLine(x - 5, mouthY, x + 5, mouthY, TFT_BLACK);
-    }
-}
 
 // ===== STATE HANDLERS =====
 
@@ -400,9 +246,9 @@ void handleMinigameMenu() {
     // Display options based on scroll position
     const char* menuOptions[] = {
         "CATCH", "JUMP", "FORTUNE", "DANCE", 
-        "SHAKE", "CANDLE", "LOVE"
+        "SHAKE", "CANDLE", "LOVE", "EXIT"
     };
-    int numOptions = 7;
+    int numOptions = 8;
     
     // Show 3 options at a time
     for (int i = 0; i < 3 && (minigameSelection - 1 + i) < numOptions; i++) {
@@ -417,7 +263,7 @@ void handleMinigameMenu() {
     
     canvas.setTextColor(TFT_DARKGREY, TFT_BLACK);
     canvas.setCursor(10, canvas.height() - 10);
-    canvas.print("A:OK B:Next");
+    canvas.print("A:Select B:Next");
     
     if (M5.BtnA.wasPressed()) {
         // Select current option
@@ -459,6 +305,11 @@ void handleMinigameMenu() {
                 buttonPressCount = 0;
                 loveMeterStartTime = millis();
                 break;
+            case 7:  // Exit
+                currentState = STATE_IDLE;
+                minigameSelection = 0;
+                M5.Speaker.tone(800, 50);
+                break;
         }
         M5.Speaker.tone(1200, 50);
     } else if (M5.BtnB.wasPressed()) {
@@ -468,7 +319,7 @@ void handleMinigameMenu() {
         M5.Speaker.tone(1000, 30);
     }
     
-    // Long press B to go back
+    // Long press B to go back (alternative quick exit)
     if (M5.BtnB.pressedFor(1000)) {
         currentState = STATE_IDLE;
         minigameSelection = 0;
@@ -476,190 +327,9 @@ void handleMinigameMenu() {
     }
 }
 
-// ===== NEW MECHANIC: Dance with Anime Music =====
-// Simple RTTTL player - this is a basic template
-void handleDanceMusic() {
-    int centerX = canvas.width() / 2 + 30;
-    int centerY = canvas.height() / 2 + 10;
-    
-    // Animated dancing character
-    int bounceOffset = (millis() - stateStartTime) % 400 < 200 ? -8 : 8;
-    int rotateOffset = (millis() - stateStartTime) % 800 < 400 ? -5 : 5;
-    
-    canvas.fillCircle(centerX + rotateOffset, centerY + bounceOffset, 20, TFT_WHITE);
-    canvas.fillCircle(centerX - 6, centerY + bounceOffset - 5, 3, TFT_BLACK);
-    canvas.fillCircle(centerX + 6, centerY + bounceOffset - 5, 3, TFT_BLACK);
-    canvas.drawArc(centerX, centerY + bounceOffset + 5, 8, 6, 180, 360, TFT_BLACK);
-    
-    // Music notes animation
-    int noteY = centerY - ((millis() - stateStartTime) / 100 % 30);
-    canvas.setTextColor(TFT_MAGENTA, TFT_BLACK);
-    canvas.setTextSize(2);
-    canvas.setCursor(centerX - 30, noteY);
-    canvas.print("♪");
-    canvas.setCursor(centerX + 25, noteY - 10);
-    canvas.print("♫");
-    canvas.setTextSize(1);
-    
-    // Play a simple tone (real RTTTL would require a parser)
-    // This is just a template - you'll implement the full RTTTL parser
-    static unsigned long lastTone = 0;
-    if (millis() - lastTone > 300) {
-        int notes[] = {880, 1047, 1109, 1175, 1047, 1175};  // A5, C6, C#6, D6...
-        int noteIndex = ((millis() - stateStartTime) / 300) % 6;
-        M5.Speaker.tone(notes[noteIndex], 200);
-        lastTone = millis();
-    }
-    
-    canvas.setTextColor(TFT_YELLOW, TFT_BLACK);
-    canvas.setCursor(20, 20);
-    canvas.print("DANCING!");
-    
-    // End after 10 seconds or button press
-    if (millis() - stateStartTime > 10000 || M5.BtnA.wasPressed() || M5.BtnB.wasPressed()) {
-        boyfriend.updateHappiness(3);
-        boyfriend.updateEnergy(-2);
-        currentState = STATE_IDLE;
-    }
-}
 
 
-// ===== NEW MECHANIC: Shake to Clean =====
-void handleShakeClean() {
-    int centerX = canvas.width() / 2 + 30;
-    int centerY = canvas.height() / 2 + 10;
-    
-    // Draw messy room (X marks)
-    canvas.setTextColor(TFT_BROWN, TFT_BLACK);
-    for (int i = 0; i < roomMess; i++) {
-        int mx = 10 + (i * 15) % 100;
-        int my = 20 + (i * 7) % 40;
-        canvas.setCursor(mx, my);
-        canvas.print("x");
-    }
-    
-    // Progress bar
-    canvas.setTextColor(TFT_WHITE, TFT_BLACK);
-    canvas.setCursor(10, 5);
-    canvas.printf("Clean: %d/20", 20 - roomMess);
-    drawProgressBar(10, 15, 100, 8, 20 - roomMess, 20, TFT_GREEN);
-    
-    // Character cleaning
-    drawCharacter(centerX, centerY);
-    
-    canvas.setTextColor(TFT_YELLOW, TFT_BLACK);
-    canvas.setCursor(10, 70);
-    canvas.print("SHAKE TO CLEAN!");
-    
-    canvas.setTextColor(TFT_DARKGREY, TFT_BLACK);
-    canvas.setCursor(10, canvas.height() - 10);
-    canvas.print("Shake count: ");
-    canvas.print(shakeCount);
-    
-    // Decrease mess with each shake
-    if (shakeCount > 0) {
-        roomMess -= shakeCount;
-        shakeCount = 0;  // Reset after processing
-        if (roomMess < 0) roomMess = 0;
-    }
-    
-    // Complete when room is clean
-    if (roomMess <= 0) {
-        boyfriend.updateHappiness(3);
-        M5.Speaker.tone(1500, 100);
-        currentState = STATE_IDLE;
-    }
-    
-    // Exit button
-    if (M5.BtnB.pressedFor(1000)) {
-        currentState = STATE_IDLE;
-    }
-}
-
-// ===== NEW MECHANIC: Love Meter (Button Mash) =====
-void handleLoveMeter() {
-    int centerX = canvas.width() / 2 + 30;
-    int centerY = canvas.height() / 2;
-    
-    canvas.setTextColor(TFT_MAGENTA, TFT_BLACK);
-    canvas.setTextSize(2);
-    canvas.setCursor(10, 10);
-    canvas.print("LOVE METER");
-    canvas.setTextSize(1);
-    
-    // Heart bar
-    drawProgressBar(10, 35, 120, 20, heartLevel, 100, TFT_RED);
-    canvas.setTextColor(TFT_WHITE, TFT_BLACK);
-    canvas.setCursor(55, 40);
-    canvas.printf("%d%%", heartLevel);
-    
-    // Character pumping hearts
-    int pumpOffset = (millis() % 200) < 100 ? -3 : 3;
-    drawCharacter(centerX, centerY + pumpOffset);
-    
-    canvas.setTextColor(TFT_YELLOW, TFT_BLACK);
-    canvas.setCursor(10, 65);
-    canvas.print("MASH BUTTONS!");
-    
-    canvas.setTextColor(TFT_DARKGREY, TFT_BLACK);
-    canvas.setCursor(10, canvas.height() - 10);
-    canvas.printf("Presses: %d", buttonPressCount);
-    
-    // Count button presses
-    if (M5.BtnA.wasPressed() || M5.BtnB.wasPressed()) {
-        buttonPressCount++;
-        heartLevel += 2;
-        if (heartLevel > 100) heartLevel = 100;
-        M5.Speaker.tone(1000 + (heartLevel * 10), 30);
-    }
-    
-    // Time limit: 10 seconds
-    unsigned long timeLeft = 10000 - (millis() - loveMeterStartTime);
-    if (timeLeft > 10000) timeLeft = 0;  // Handle overflow
-    
-    canvas.setTextColor(TFT_CYAN, TFT_BLACK);
-    canvas.setCursor(10, 20);
-    canvas.printf("Time: %ld", timeLeft / 1000);
-    
-    // End game
-    if (millis() - loveMeterStartTime > 10000) {
-        currentState = STATE_MINIGAME_RESULT;
-        gameScore = heartLevel;  // Use heart level as score
-        stateStartTime = millis();
-        boyfriend.updateHappiness(heartLevel / 20);  // Bonus happiness based on performance
-    }
-}
-
-// ===== MINIGAME: Result Screen =====
-void handleMinigameResult() {
-    canvas.setTextColor(TFT_YELLOW, TFT_BLACK);
-    canvas.setTextSize(2);
-    canvas.setCursor(30, 30);
-    canvas.print("SCORE:");
-    canvas.setCursor(50, 50);
-    canvas.printf("%d", gameScore);
-    canvas.setTextSize(1);
-    
-    canvas.setTextColor(TFT_GREEN, TFT_BLACK);
-    canvas.setCursor(20, 75);
-    if (gameScore > 5) {
-        canvas.print("Great job!");
-    } else if (gameScore > 2) {
-        canvas.print("Nice try!");
-    } else {
-        canvas.print("Keep practicing!");
-    }
-    
-    canvas.setTextColor(TFT_DARKGREY, TFT_BLACK);
-    canvas.setCursor(10, canvas.height() - 10);
-    canvas.print("Press any button");
-    
-    if (M5.BtnA.wasPressed() || M5.BtnB.wasPressed()) {
-        currentState = STATE_IDLE;
-        M5.Speaker.tone(1000, 50);
-    }
-}
-
+// main loop
 void loop() {
     unsigned long now = millis();
     
@@ -864,7 +534,7 @@ void loop() {
         currentState != STATE_SHAKE_CLEAN &&
         currentState != STATE_BLOW_CANDLE &&
         currentState != STATE_LOVE_METER) {
-        drawStats();
+        drawStatsBar();
         
         // Show battery warning if low
         if (lowBattery) {

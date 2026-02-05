@@ -1,4 +1,4 @@
-#include "GameState.h"
+#include "../GameState.h"
 
 // Global constants needed by this state
 extern unsigned long lastAttentionTime;
