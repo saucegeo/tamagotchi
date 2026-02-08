@@ -22,12 +22,18 @@ void handleIdleState() {
     // Draw the character
     drawCharacter(centerX, centerY);
     
-    // Button B: Feed
+    // Draw poop if present
+    if (boyfriend.poopCount > 0) {
+        for (int i = 0; i < boyfriend.poopCount && i < 4; i++) {
+            drawPoop(centerX - 30 + (i * 15), canvas.height() - 25);
+        }
+    }
+    
+    // Button B: Open feed menu
     if (M5.BtnB.wasPressed()) {
-        currentState = STATE_EATING;
+        currentState = STATE_FEED_MENU;
         stateStartTime = millis();
-        boyfriend.updateHunger(-5);  // Reduce hunger by 5
-        M5.Speaker.tone(1500, 50);   // Happy beep
+        M5.Speaker.tone(1000, 50);
     } 
     // Button A: Open menu
     else if (M5.BtnA.wasPressed()) {
@@ -39,7 +45,7 @@ void handleIdleState() {
     
     // Check if pet needs attention (with cooldown to prevent spam)
     unsigned long now = millis();
-    if ((boyfriend.hunger > 18 || boyfriend.happiness < 5 || boyfriend.energy < 5) &&
+    if ((boyfriend.hunger == 0 || boyfriend.happiness == 0 || boyfriend.isSick) &&
         (now - lastAttentionTime > ATTENTION_COOLDOWN)) {
         currentState = STATE_ATTENTION_NEEDED;
         stateStartTime = now;

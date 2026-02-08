@@ -98,20 +98,31 @@ void setup() {
     // First boot detection
     uint8_t magicByte = EEPROM.read(100);
     if (magicByte != 0x42) {
-        // First boot!  Initialize defaults
+        // First boot!  Initialize defaults for Tamagotchi lifecycle
         EEPROM.write(100, 0x42);
         EEPROM.write(0, 0);   // sleeping = false
         EEPROM.write(1, 8);   // sleep = 8
-        EEPROM.write(2, 12);  // happiness = 12
-        EEPROM.write(3, 0);   // hunger = 0
+        EEPROM.write(2, 4);   // happiness = 4 hearts
+        EEPROM.write(3, 4);   // hunger = 4 hearts
         EEPROM.write(4, 12);  // energy = 12
         EEPROM.write(5, 0);   // age = 0
         EEPROM.write(6, 0);   // mood = neutral
+        EEPROM.write(7, 10);  // weight = 10
+        EEPROM.write(8, 0);   // discipline = 0%
+        EEPROM.write(9, 0);   // careMistakes = 0
+        EEPROM.write(10, 0);  // poopCount = 0
+        EEPROM.write(11, 0);  // isSick = false
+        EEPROM.write(12, 1);  // stage = BABY
+        EEPROM.write(13, 1);  // lightsOn = true
         EEPROM.commit();
     }
     
     // Load pet data
     boyfriend.loadFromEEPROM();
+    
+    // Set clock time for lifecycle (start of game)
+    clockSetTime = millis();
+    hatchTime = millis();  // Set hatch time for evolution tracking
     
     // Initialize IMU (gyroscope/accelerometer)
     M5.Imu.begin();
@@ -137,197 +148,7 @@ void setup() {
 
 
 // ===== STATE HANDLERS =====
-
-void handlePlayingState() {
-    int centerX = canvas.width() / 2 + 30;
-    int centerY = canvas.height() / 2 + 10;
-    int bounceOffset = (millis() - stateStartTime) % 500 < 250 ? -5 : 5;
-    drawCharacter(centerX, centerY + bounceOffset);
-    
-    int heartOffset = (millis() - stateStartTime) / 100 % 20;
-    canvas.setTextColor(TFT_MAGENTA, TFT_BLACK);
-    canvas.setCursor(centerX - 25, centerY - heartOffset);
-    canvas.print("♥");
-    canvas.setCursor(centerX + 25, centerY - heartOffset - 5);
-    canvas.print("♥");
-    
-    if (millis() - stateStartTime > 2000) {
-        currentState = STATE_IDLE;
-    }
-}
-
-void handleSleepingState() {
-    int centerX = canvas.width() / 2 + 30;
-    int centerY = canvas.height() / 2 + 10;
-    
-    canvas.fillCircle(centerX, centerY, 20, TFT_WHITE);
-    canvas.drawLine(centerX - 8, centerY - 5, centerX - 4, centerY - 5, TFT_BLACK);
-    canvas.drawLine(centerX + 4, centerY - 5, centerX + 8, centerY - 5, TFT_BLACK);
-    canvas.drawLine(centerX - 3, centerY + 5, centerX + 3, centerY + 5, TFT_BLACK);
-    
-    int zOffset = (millis() - stateStartTime) / 500 % 3;
-    canvas.setTextColor(TFT_CYAN, TFT_BLACK);
-    canvas.setCursor(centerX + 25, centerY - 20 + zOffset * 5);
-    canvas.print("Z");
-    canvas.setCursor(centerX + 32, centerY - 15 + zOffset * 5);
-    canvas.print("z");
-    canvas.setCursor(centerX + 37, centerY - 10 + zOffset * 5);
-    canvas.print("z");
-    
-    // Wake conditions: timeout OR buttons OR device picked up (not flat)
-    if (millis() - stateStartTime > 5000 || 
-        M5.BtnA.wasPressed() || 
-        M5.BtnB.wasPressed() ||
-        !isFlat) {  // Add this: wake when device picked up!
-        boyfriend.updateEnergy(5);
-        currentState = STATE_IDLE;
-    }
-}
-
-void handleAttentionNeededState() {
-    int centerX = canvas.width() / 2 + 30;
-    int centerY = canvas.height() / 2 + 10;
-    drawCharacter(centerX, centerY);
-    
-    if ((millis() - stateStartTime) % 1000 < 500) {
-        canvas.setTextColor(TFT_RED, TFT_BLACK);
-        canvas.setTextSize(2);
-        canvas.setCursor(centerX + 25, centerY - 20);
-        canvas.print("!");
-        canvas.setTextSize(1);
-    }
-    
-    // Show prompt
-    canvas.setTextColor(TFT_DARKGREY, TFT_BLACK);
-    canvas.setCursor(10, canvas.height() - 10);
-    canvas.print("Press any button");
-    
-    // Allow button press to exit immediately
-    if (M5.BtnA.wasPressed() || M5.BtnB.wasPressed()) {
-        currentState = STATE_IDLE;
-        M5.Speaker.tone(1000, 50);
-        return;
-    }
-    
-    if (millis() - stateStartTime > 3000 || 
-        (boyfriend.hunger <= 18 && boyfriend.happiness >= 5 && boyfriend.energy >= 5)) {
-        currentState = STATE_IDLE;
-    }
-}
-
-void handleLoveNoteState() {
-    int centerX = canvas.width() / 2 + 30;
-    int centerY = canvas.height() / 2 + 10;
-    drawCharacter(centerX, centerY);
-    
-    canvas.setTextColor(TFT_MAGENTA, TFT_BLACK);
-    canvas.setCursor(10, centerY - 25);
-    canvas.print("I <3 U!");
-    
-    int heartY = centerY - ((millis() - stateStartTime) / 50 % 30);
-    canvas.setCursor(centerX - 30, heartY);
-    canvas.print("♥");
-    canvas.setCursor(centerX + 20, heartY - 5);
-    canvas.print("♥");
-    
-    if (millis() - stateStartTime > 3000) {
-        currentState = STATE_IDLE;
-    }
-}
-
-// ===== MINIGAME: Menu =====
-void handleMinigameMenu() {
-    canvas.setTextColor(TFT_YELLOW, TFT_BLACK);
-    canvas.setTextSize(2);
-    canvas.setCursor(20, 10);
-    canvas.print("MENU");
-    canvas.setTextSize(1);
-    
-    // Display options based on scroll position
-    const char* menuOptions[] = {
-        "CATCH", "JUMP", "FORTUNE", "DANCE", 
-        "SHAKE", "CANDLE", "LOVE", "EXIT"
-    };
-    int numOptions = 8;
-    
-    // Show 3 options at a time
-    for (int i = 0; i < 3 && (minigameSelection - 1 + i) < numOptions; i++) {
-        int optionIndex = minigameSelection - 1 + i;
-        if (optionIndex < 0) optionIndex = 0;
-        
-        canvas.setTextColor(i == 1 ? TFT_GREEN : TFT_WHITE, TFT_BLACK);
-        canvas.setCursor(20, 35 + (i * 15));
-        canvas.print(i == 1 ? "> " : "  ");
-        canvas.print(menuOptions[optionIndex]);
-    }
-    
-    canvas.setTextColor(TFT_DARKGREY, TFT_BLACK);
-    canvas.setCursor(10, canvas.height() - 10);
-    canvas.print("A:Select B:Next");
-    
-    if (M5.BtnA.wasPressed()) {
-        // Select current option
-        stateStartTime = millis();
-        switch(minigameSelection) {
-            case 0:  // Catch
-                currentState = STATE_MINIGAME_CATCH;
-                objectX = random(20, 120);
-                objectY = 10;
-                playerX = 60;
-                gameScore = 0;
-                gameActive = true;
-                break;
-            case 1:  // Jump
-                currentState = STATE_MINIGAME_JUMP;
-                objectX = 0;
-                playerX = 30;
-                gameScore = 0;
-                gameActive = true;
-                break;
-            case 2:  // Fortune
-                currentState = STATE_FORTUNE_COOKIE;
-                fortuneIndex = random(0, 8);
-                break;
-            case 3:  // Dance
-                currentState = STATE_DANCE_MUSIC;
-                break;
-            case 4:  // Shake Clean
-                currentState = STATE_SHAKE_CLEAN;
-                roomMess = 20;  // Start with messy room
-                shakeCount = 0;
-                break;
-            case 5:  // Blow Candle
-                currentState = STATE_BLOW_CANDLE;
-                break;
-            case 6:  // Love Meter
-                currentState = STATE_LOVE_METER;
-                heartLevel = 0;
-                buttonPressCount = 0;
-                loveMeterStartTime = millis();
-                break;
-            case 7:  // Exit
-                currentState = STATE_IDLE;
-                minigameSelection = 0;
-                M5.Speaker.tone(800, 50);
-                break;
-        }
-        M5.Speaker.tone(1200, 50);
-    } else if (M5.BtnB.wasPressed()) {
-        // Cycle through options
-        minigameSelection++;
-        if (minigameSelection >= numOptions) minigameSelection = 0;
-        M5.Speaker.tone(1000, 30);
-    }
-    
-    // Long press B to go back (alternative quick exit)
-    if (M5.BtnB.pressedFor(1000)) {
-        currentState = STATE_IDLE;
-        minigameSelection = 0;
-        M5.Speaker.tone(800, 50);
-    }
-}
-
-
+// Note: State handlers are now in separate files in /states and /minigames folders
 
 // main loop
 void loop() {
@@ -438,14 +259,15 @@ void loop() {
     int animSpeed = lowBattery ? 400 : 200;
     
     // === 2. HANDLE STAT DECAY (FIX #3 - removed immediate EEPROM writes from Boyfriend class) ===
+    // Hearts decrease over time (4-heart system)
     if (now - lastHungerUpdate > HUNGER_INTERVAL) {
-        boyfriend.hunger++;
-        if (boyfriend.hunger > 24) boyfriend.hunger = 24;
+        boyfriend.hunger--;  // Lose 1 hunger heart every 30 seconds
+        if (boyfriend.hunger < 0) boyfriend.hunger = 0;
         lastHungerUpdate = now;
     }
     
     if (now - lastHappinessUpdate > HAPPINESS_INTERVAL) {
-        boyfriend.happiness--;
+        boyfriend.happiness--;  // Lose 1 happiness heart every 45 seconds
         if (boyfriend.happiness < 0) boyfriend.happiness = 0;
         lastHappinessUpdate = now;
     }
@@ -454,6 +276,46 @@ void loop() {
         boyfriend.energy--;
         if (boyfriend.energy < 0) boyfriend.energy = 0;
         lastEnergyUpdate = now;
+    }
+    
+    // === POOP SCHEDULING ===
+    if (currentState != STATE_DEAD) {
+        schedulePoop();
+    }
+    
+    // === EVOLUTION CHECK ===
+    if (boyfriend.stage != STAGE_ADULT && currentState != STATE_DEAD) {
+        checkEvolution();
+    }
+    
+    // === RANDOM DISCIPLINE CALLS ===
+    // Random call every 30-60 minutes when idle
+    if (currentState == STATE_IDLE && boyfriend.stage >= STAGE_CHILD) {
+        if (nextDisciplineCall == 0) {
+            nextDisciplineCall = now + random(1800000, 3600000);  // 30-60 min
+        }
+        if (now >= nextDisciplineCall) {
+            // Trigger discipline call
+            currentState = STATE_DISCIPLINE_CALL;
+            stateStartTime = now;
+            nextDisciplineCall = 0;  // Reset for next time
+        }
+    }
+    
+    // === CHECK FOR DEATH CONDITIONS ===
+    // Only check if not already dead
+    if (currentState != STATE_DEAD && !isDead) {
+        if (checkDeathConditions()) {
+            isDead = true;
+            currentState = STATE_DEAD;
+            stateStartTime = now;
+            // Play sad death sound
+            M5.Speaker.tone(800, 200);
+            delay(200);
+            M5.Speaker.tone(600, 200);
+            delay(200);
+            M5.Speaker.tone(400, 400);
+        }
     }
     
     // === 3. UPDATE ANIMATION ===
@@ -518,6 +380,15 @@ void loop() {
         case STATE_LOVE_METER:
             handleLoveMeter();
             break;
+        case STATE_DEAD:
+            handleDeathState();
+            break;
+        case STATE_DISCIPLINE_CALL:
+            handleDisciplineCall();
+            break;
+        case STATE_FEED_MENU:
+            handleFeedMenu();
+            break;
         case STATE_SICK:
             drawCharacter(canvas.width() / 2 + 30, canvas.height() / 2 + 10);
             break;
@@ -533,7 +404,10 @@ void loop() {
         currentState != STATE_STARGAZING &&
         currentState != STATE_SHAKE_CLEAN &&
         currentState != STATE_BLOW_CANDLE &&
-        currentState != STATE_LOVE_METER) {
+        currentState != STATE_LOVE_METER &&
+        currentState != STATE_DEAD &&
+        currentState != STATE_DISCIPLINE_CALL &&
+        currentState != STATE_FEED_MENU) {
         drawStatsBar();
         
         // Show battery warning if low
@@ -557,6 +431,13 @@ void loop() {
         EEPROM.write(4, boyfriend.energy);
         EEPROM.write(5, boyfriend.age);
         EEPROM.write(6, boyfriend.mood);
+        EEPROM.write(7, boyfriend.weight);
+        EEPROM.write(8, boyfriend.discipline);
+        EEPROM.write(9, boyfriend.careMistakes);
+        EEPROM.write(10, boyfriend.poopCount);
+        EEPROM.write(11, boyfriend.isSick);
+        EEPROM.write(12, (int)boyfriend.stage);
+        EEPROM.write(13, boyfriend.lightsOn);
         EEPROM.commit();
         lastSave = now;
     }
