@@ -42,6 +42,13 @@ public:
   bool isSick;        // Is pet sick from neglect? - address 11
   LifeStage stage;    // Evolution stage - address 12
   bool lightsOn;      // Are lights on/off - address 13
+  
+  // Sickness system
+  bool hasToothache;  // Has toothache from too many snacks - address 14
+  bool isSulking;     // Is sulking from care mistake - address 15
+  int snackStreak;    // Consecutive snacks eaten (resets after time) - address 16
+  int medicineNeeded; // Doses of medicine needed to cure - address 17
+  unsigned long sulkStartTime; // When sulking started (not saved to EEPROM)
 
   // Update methods: Change attributes and save to EEPROM
   void updateSleeping();  // Toggle sleep state and save
@@ -58,6 +65,18 @@ public:
   void cleanPoop();  // Remove all poop
   void toggleLights();  // Turn lights on/off
   void evolve();  // Evolve to next stage
+  
+  // Sickness system methods
+  void eatSnack();  // Track snack eating for toothache
+  void resetSnackStreak();  // Reset snack counter after time
+  void checkToothache();  // Check if should get toothache
+  void giveMedicine();  // Give one dose of medicine
+  void startSulking();  // Begin sulking state
+  void endSulking();  // Stop sulking
+  void checkSulking();  // Check if should stop sulking or run away
+  bool canEat();  // Check if can eat (not sick/sulking)
+  bool canPlay();  // Check if can play games (not sick)
+  bool canUseItems();  // Check if can use items (not sick)
 
   // Helper: Map attribute value to bar length for display (e.g., for OLED progress bars)
   int mapValue(int val, int barLength = 20);  // Returns pixels for bar (0-20 default)

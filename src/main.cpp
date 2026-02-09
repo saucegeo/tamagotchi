@@ -9,6 +9,8 @@
 #include <EEPROM.h>
 #include "sprites.h"
 #include "GameState.h"
+#include "music/RTTTL.h"
+#include "music/songs.h"
 
 // Note: We don't include .cpp files!
 // Each .cpp compiles separately. The linker connects them using
@@ -35,10 +37,10 @@ unsigned long lastHungerUpdate = 0;
 unsigned long lastHappinessUpdate = 0;
 unsigned long lastEnergyUpdate = 0;
 
-// Intervals (in milliseconds)
-const unsigned long HUNGER_INTERVAL = 30000;     // 30 seconds
-const unsigned long HAPPINESS_INTERVAL = 45000;  // 45 seconds
-const unsigned long ENERGY_INTERVAL = 60000;     // 60 seconds
+// Intervals (in milliseconds) - Realistic Tamagotchi timing
+const unsigned long HUNGER_INTERVAL = 1200000;     // 20 minutes per heart (80 min to empty)
+const unsigned long HAPPINESS_INTERVAL = 1800000;  // 30 minutes per heart (120 min to empty)
+const unsigned long ENERGY_INTERVAL = 3600000;     // 60 minutes per point (sleep/energy)
 
 // IMU/Gyro state for motion mechanics
 unsigned long lastShakeTime = 0;
@@ -49,16 +51,23 @@ unsigned long lastStepTime = 0;
 unsigned long lastAutoStateChange = 0;
 const unsigned long AUTO_STATE_COOLDOWN = 3000;  // 3 seconds before auto-sleep/stargazing can trigger
 
-// RTTTL music player state
-const char* evangelionRTTTL = "Evangelion:d=8,o=3,b=120:8a5,8p,8c6,8p,32c#6,8d6,32p,6c6,4d6,8d6,8g6,8f6,16e6,16d6,16p,4e6";
-bool isMusicPlaying = false;
-int musicNoteIndex = 0;
+// Background music player
+RTTTL bgMusicPlayer;
+bool bgMusicEnabled = false;  // Disabled - was annoying
+bool bgMusicPlaying = false;
+int currentBGTrack = 0;
+unsigned long lastNoteTime = 0;
+Note currentBGNote;
 
 const SpecialDay specialDays[] = {
     {2, 14, "Valentine's", "Happy Valentine's Day! I love you! ❤"},
     {2, 20, "Birthday", "Happy Birthday, my love! You're amazing!"},
     {6, 7, "Birthday", "It's my birthday! Thanks for being here!"}
 };
+
+// ===== FORWARD DECLARATIONS =====
+void startBackgroundMusic(int trackIndex);
+void updateBackgroundMusic();
 
 // ===== SETUP =====
 void setup() {
@@ -114,6 +123,10 @@ void setup() {
         EEPROM.write(11, 0);  // isSick = false
         EEPROM.write(12, 1);  // stage = BABY
         EEPROM.write(13, 1);  // lightsOn = true
+        EEPROM.write(14, 0);  // hasToothache = false
+        EEPROM.write(15, 0);  // isSulking = false
+        EEPROM.write(16, 0);  // snackStreak = 0
+        EEPROM.write(17, 0);  // medicineNeeded = 0
         EEPROM.commit();
     }
     
@@ -141,10 +154,59 @@ void setup() {
     
     Serial.println("=== Setup Complete ===");
     
+    // Startup jingle (cute Tamagotchi-style beep sequence)
+    M5.Speaker.tone(1047, 100);  // C
+    delay(120);
+    M5.Speaker.tone(1319, 100);  // E
+    delay(120);
+    M5.Speaker.tone(1568, 100);  // G
+    delay(120);
+    M5.Speaker.tone(2093, 150);  // C high
+    delay(200);
+    
+    // Start background music
+    startBackgroundMusic(0);
+    
     // Small delay to stabilize power
     delay(100);
 }
 
+// ===== BACKGROUND MUSIC SYSTEM =====
+void startBackgroundMusic(int trackIndex) {
+    if (!bgMusicEnabled) return;
+    
+    currentBGTrack = trackIndex % BACKGROUND_MUSIC_COUNT;
+    bgMusicPlayer.begin(BACKGROUND_MUSIC[currentBGTrack]);
+    bgMusicPlaying = true;
+    lastNoteTime = millis();
+}
+
+void updateBackgroundMusic() {
+    if (!bgMusicEnabled || !bgMusicPlaying) return;
+    
+    unsigned long now = millis();
+    
+    // Check if current note has finished playing
+    if (now - lastNoteTime >= currentBGNote.duration) {
+        // Try to get next note
+        if (bgMusicPlayer.getNextNote(currentBGNote)) {
+            // Play note at lower volume for background (30% volume)
+            if (currentBGNote.frequency > 0) {
+                M5.Speaker.tone(currentBGNote.frequency, currentBGNote.duration);
+            }
+            lastNoteTime = now;
+        } else {
+            // Song finished, loop to next track
+            currentBGTrack = (currentBGTrack + 1) % BACKGROUND_MUSIC_COUNT;
+            startBackgroundMusic(currentBGTrack);
+        }
+    }
+}
+
+void stopBackgroundMusic() {
+    bgMusicPlaying = false;
+    M5.Speaker.stop();
+}
 
 
 // ===== STATE HANDLERS =====
@@ -302,6 +364,10 @@ void loop() {
         }
     }
     
+    // === UPDATE SICKNESS SYSTEM ===
+    // Check sulking, toothache, snack streaks, etc.
+    updateSicknessSystem();
+    
     // === CHECK FOR DEATH CONDITIONS ===
     // Only check if not already dead
     if (currentState != STATE_DEAD && !isDead) {
@@ -322,6 +388,30 @@ void loop() {
     if (now - lastAnimUpdate > animSpeed) {
         animationFrame++;
         lastAnimUpdate = now;
+    }
+    
+    // === 4. BACKGROUND MUSIC CONTROL ===
+    // Start music for idle/menu states, stop for minigames (they have their own music)
+    static GameState lastMusicState = STATE_IDLE;
+    if (currentState != lastMusicState) {
+        // State changed - adjust music
+        if (currentState == STATE_IDLE || currentState == STATE_FEED_MENU || 
+            currentState == STATE_MINIGAME_MENU || currentState == STATE_SLEEPING) {
+            if (!bgMusicPlaying) {
+                startBackgroundMusic(currentBGTrack);
+            }
+        } else if (currentState == STATE_MINIGAME_CATCH || currentState == STATE_MINIGAME_JUMP ||
+                   currentState == STATE_DANCE_MUSIC) {
+            // Minigames handle their own music
+            stopBackgroundMusic();
+        }
+        lastMusicState = currentState;
+    }
+    
+    // Update background music (non-blocking)
+    if (currentState == STATE_IDLE || currentState == STATE_FEED_MENU || 
+        currentState == STATE_MINIGAME_MENU || currentState == STATE_SLEEPING) {
+        updateBackgroundMusic();
     }
     
     // === 4. CLEAR CANVAS ===
@@ -423,7 +513,7 @@ void loop() {
     
     // === 8. AUTO-SAVE TO EEPROM (batch writes to prevent flickering) ===
     static unsigned long lastSave = 0;
-    if (now - lastSave > 60000) {
+    if (now - lastSave > 60000) {  // Save every 60 seconds
         EEPROM.write(0, boyfriend.sleeping);
         EEPROM.write(1, boyfriend.sleep);
         EEPROM.write(2, boyfriend.happiness);
@@ -438,6 +528,10 @@ void loop() {
         EEPROM.write(11, boyfriend.isSick);
         EEPROM.write(12, (int)boyfriend.stage);
         EEPROM.write(13, boyfriend.lightsOn);
+        EEPROM.write(14, boyfriend.hasToothache);
+        EEPROM.write(15, boyfriend.isSulking);
+        EEPROM.write(16, boyfriend.snackStreak);
+        EEPROM.write(17, boyfriend.medicineNeeded);
         EEPROM.commit();
         lastSave = now;
     }

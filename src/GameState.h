@@ -87,9 +87,15 @@ extern int roundsPlayed;
 extern int playerGuess;
 extern int computerChoice;
 
+// Sickness tracking
+extern unsigned long lastSnackTime;
+extern unsigned long lastMedicineTime;
+extern int consecutiveSnacks;
+
 // Constants
 extern const unsigned long ATTENTION_COOLDOWN;
 extern const unsigned long DEATH_THRESHOLD;
+extern const unsigned long SICKNESS_DEATH_THRESHOLD;
 extern const int MAX_AGE;
 extern const unsigned long BABY_TO_CHILD_TIME;
 extern const unsigned long ATTENTION_TIMEOUT;
@@ -113,6 +119,8 @@ bool checkDeathConditions();
 void resetPet();
 void checkEvolution();
 void schedulePoop();
+void updateSicknessSystem();  // Check sulking, toothache, snack streaks, etc.
+void drawSicknessIndicators(int x, int y);  // Draw skull, tooth, or sulking icons
 
 // ===== STATE HANDLERS =====
 // These are implemented in separate .cpp files

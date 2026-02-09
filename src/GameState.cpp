@@ -49,12 +49,18 @@ int roundsPlayed = 0;
 int playerGuess = 0;
 int computerChoice = 0;
 
+// Sickness tracking
+unsigned long lastSnackTime = 0;
+unsigned long lastMedicineTime = 0;
+int consecutiveSnacks = 0;
+
 // Constants
 const unsigned long ATTENTION_COOLDOWN = 10000;  // 10 seconds
-const unsigned long DEATH_THRESHOLD = 120000;    // 2 minutes in critical condition = death
+const unsigned long DEATH_THRESHOLD = 7200000;    // 2 hours in critical condition = death
+const unsigned long SICKNESS_DEATH_THRESHOLD = 5400000; // 90 minutes sick without medicine = death
 const int MAX_AGE = 99;                          // Maximum age before death from old age
 const unsigned long BABY_TO_CHILD_TIME = 3900000; // 65 minutes
-const unsigned long ATTENTION_TIMEOUT = 900000;  // 15 minutes
+const unsigned long ATTENTION_TIMEOUT = 900000;  // 15 minutes before care mistake
 const unsigned long POOP_INTERVAL_BABY = 900000; // 15 minutes for baby first poop
 const unsigned long POOP_INTERVAL_NORMAL = 10800000; // 3 hours
 
@@ -97,55 +103,110 @@ void drawProgressBar(int x, int y, int width, int height, int value, int maxValu
 
 // Draw the character with expressions based on happiness
 void drawCharacter(int x, int y, bool heartEyes) {
-    // Breathing animation
+    // Subtle floating/breathing animation for more life
     int breathOffset = 0;
-    switch (animationFrame % 4) {
-        case 0: breathOffset = 0; break;
-        case 1: breathOffset = 1; break;
-        case 2: breathOffset = 2; break;
-        case 3: breathOffset = 1; break;
+    int floatOffset = 0;
+    switch (animationFrame % 8) {
+        case 0: case 7: breathOffset = 0; floatOffset = 0; break;
+        case 1: case 6: breathOffset = 1; floatOffset = -1; break;
+        case 2: case 5: breathOffset = 2; floatOffset = -2; break;
+        case 3: case 4: breathOffset = 1; floatOffset = -1; break;
     }
     
+    y += floatOffset;  // Add floating effect
     int radius = 20 + breathOffset;
     
-    // Body (circle)
-    canvas.fillCircle(x, y, radius, TFT_WHITE);
+    // Body (circle) - color based on happiness
+    uint16_t bodyColor = TFT_WHITE;
+    if (boyfriend.isSulking) {
+        bodyColor = TFT_LIGHTGREY;  // Darker when sulking
+    } else if (boyfriend.happiness == 4) {
+        // Very happy - slight pink tint
+        bodyColor = 0xFFF8;  // Light pink
+    }
+    canvas.fillCircle(x, y, radius, bodyColor);
+    canvas.drawCircle(x, y, radius, TFT_DARKGREY);  // Outline
     
-    // Eyes (expression based on happiness or heartEyes override)
+    // Eyes (expression based on 0-4 happiness scale)
     int eyeY = y - 5;
     if (heartEyes) {
-        // Heart eyes!
-        canvas.setTextColor(TFT_RED, TFT_WHITE);
+        // Heart eyes! (when fed snacks or playing)
+        canvas.setTextColor(TFT_RED, bodyColor);
         canvas.setTextSize(1);
-        canvas.setCursor(x - 8, eyeY - 3);
+        canvas.setCursor(x - 10, eyeY - 3);
         canvas.print("♥");
-        canvas.setCursor(x + 2, eyeY - 3);
+        canvas.setCursor(x + 4, eyeY - 3);
         canvas.print("♥");
-    } else if (boyfriend.happiness > 15) {
-        // Happy eyes (arcs)
-        canvas.drawLine(x - 8, eyeY, x - 4, eyeY - 2, TFT_BLACK);
-        canvas.drawLine(x + 4, eyeY - 2, x + 8, eyeY, TFT_BLACK);
-    } else if (boyfriend.happiness < 5) {
-        // Sad eyes
-        canvas.fillCircle(x - 6, eyeY, 2, TFT_BLACK);
-        canvas.fillCircle(x + 6, eyeY, 2, TFT_BLACK);
-    } else {
-        // Normal eyes
+    } else if (boyfriend.isSulking) {
+        // Sulking - looking away
+        canvas.fillCircle(x - 8, eyeY, 2, TFT_BLACK);
+        canvas.fillCircle(x + 4, eyeY, 2, TFT_BLACK);
+    } else if (boyfriend.isSick || boyfriend.hasToothache) {
+        // Sick eyes - X_X
+        canvas.drawLine(x - 8, eyeY - 2, x - 4, eyeY + 2, TFT_BLACK);
+        canvas.drawLine(x - 4, eyeY - 2, x - 8, eyeY + 2, TFT_BLACK);
+        canvas.drawLine(x + 4, eyeY - 2, x + 8, eyeY + 2, TFT_BLACK);
+        canvas.drawLine(x + 8, eyeY - 2, x + 4, eyeY + 2, TFT_BLACK);
+    } else if (boyfriend.happiness >= 4) {
+        // Very happy - big sparkle eyes with stars
+        canvas.fillCircle(x - 6, eyeY, 4, TFT_BLACK);
+        canvas.fillCircle(x + 6, eyeY, 4, TFT_BLACK);
+        canvas.fillCircle(x - 6, eyeY - 1, 1, TFT_WHITE);  // Sparkle
+        canvas.fillCircle(x + 6, eyeY - 1, 1, TFT_WHITE);
+    } else if (boyfriend.happiness == 3) {
+        // Happy - normal big eyes
         canvas.fillCircle(x - 6, eyeY, 3, TFT_BLACK);
         canvas.fillCircle(x + 6, eyeY, 3, TFT_BLACK);
+    } else if (boyfriend.happiness == 2) {
+        // OK - smaller eyes
+        canvas.fillCircle(x - 6, eyeY, 2, TFT_BLACK);
+        canvas.fillCircle(x + 6, eyeY, 2, TFT_BLACK);
+    } else if (boyfriend.happiness == 1) {
+        // Sad - droopy eyes
+        canvas.drawLine(x - 8, eyeY - 1, x - 4, eyeY + 1, TFT_BLACK);
+        canvas.drawLine(x + 4, eyeY + 1, x + 8, eyeY - 1, TFT_BLACK);
+        canvas.fillCircle(x - 6, eyeY + 1, 1, TFT_BLACK);
+        canvas.fillCircle(x + 6, eyeY + 1, 1, TFT_BLACK);
+    } else {
+        // Very sad (0) - tearful
+        canvas.fillCircle(x - 6, eyeY, 2, TFT_BLACK);
+        canvas.fillCircle(x + 6, eyeY, 2, TFT_BLACK);
+        canvas.drawLine(x - 6, eyeY + 3, x - 6, eyeY + 8, TFT_CYAN);  // Tear
+        canvas.drawLine(x + 6, eyeY + 3, x + 6, eyeY + 8, TFT_CYAN);
     }
     
-    // Mouth
-    int mouthY = y + 5;
-    if (boyfriend.happiness > 15) {
-        // Smile
-        canvas.drawArc(x, mouthY - 2, 6, 4, 180, 360, TFT_BLACK);
-    } else if (boyfriend.happiness < 5) {
-        // Frown
-        canvas.drawArc(x, mouthY + 4, 6, 4, 0, 180, TFT_BLACK);
-    } else {
-        // Neutral
+    // Mouth - based on happiness
+    int mouthY = y + 6;
+    if (boyfriend.isSick || boyfriend.hasToothache) {
+        // Sick mouth - wavy line
+        canvas.drawLine(x - 6, mouthY, x - 2, mouthY + 2, TFT_BLACK);
+        canvas.drawLine(x - 2, mouthY + 2, x + 2, mouthY, TFT_BLACK);
+        canvas.drawLine(x + 2, mouthY, x + 6, mouthY + 2, TFT_BLACK);
+    } else if (boyfriend.isSulking) {
+        // Pouting
+        canvas.drawLine(x - 5, mouthY + 2, x + 5, mouthY + 2, TFT_BLACK);
+    } else if (boyfriend.happiness >= 3) {
+        // Big smile
+        canvas.drawArc(x, mouthY - 3, 8, 6, 180, 360, TFT_BLACK);
+        // Open mouth for extra happiness
+        if (boyfriend.happiness == 4) {
+            canvas.drawArc(x, mouthY - 1, 5, 4, 180, 360, TFT_BLACK);
+        }
+    } else if (boyfriend.happiness == 2) {
+        // Small smile
+        canvas.drawArc(x, mouthY - 1, 5, 3, 180, 360, TFT_BLACK);
+    } else if (boyfriend.happiness == 1) {
+        // Neutral/flat
         canvas.drawLine(x - 5, mouthY, x + 5, mouthY, TFT_BLACK);
+    } else {
+        // Frown (0 happiness)
+        canvas.drawArc(x, mouthY + 5, 6, 4, 0, 180, TFT_BLACK);
+    }
+    
+    // Add blush when very happy
+    if (boyfriend.happiness >= 3 && !boyfriend.isSick) {
+        canvas.fillCircle(x - 15, y + 3, 3, TFT_PINK);
+        canvas.fillCircle(x + 15, y + 3, 3, TFT_PINK);
     }
 }
 
@@ -267,6 +328,47 @@ void drawSkull(int x, int y) {
     }
 }
 
+// Draw sickness indicators next to character
+void drawSicknessIndicators(int x, int y) {
+    // Draw skull for standard sickness
+    if (boyfriend.isSick) {
+        // Small skull icon
+        canvas.fillCircle(x, y, 8, TFT_WHITE);
+        canvas.drawCircle(x, y, 8, TFT_DARKGREY);
+        canvas.fillCircle(x - 3, y - 2, 2, TFT_BLACK);  // Left eye
+        canvas.fillCircle(x + 3, y - 2, 2, TFT_BLACK);  // Right eye
+        canvas.drawLine(x - 3, y + 3, x + 3, y + 3, TFT_DARKGREY);  // Mouth
+        
+        // Show medicine needed count
+        canvas.setTextColor(TFT_RED, TFT_BLACK);
+        canvas.setTextSize(1);
+        canvas.setCursor(x - 8, y + 12);
+        canvas.printf("x%d", boyfriend.medicineNeeded);
+    }
+    
+    // Draw broken tooth for toothache
+    if (boyfriend.hasToothache) {
+        // Tooth shape
+        canvas.fillRoundRect(x - 4, y - 6, 8, 10, 2, TFT_WHITE);
+        canvas.drawRoundRect(x - 4, y - 6, 8, 10, 2, TFT_DARKGREY);
+        
+        // Crack/break in tooth (red zigzag)
+        canvas.drawLine(x - 2, y - 2, x + 2, y, TFT_RED);
+        canvas.drawLine(x + 2, y, x - 2, y + 2, TFT_RED);
+        
+        // Root
+        canvas.drawLine(x, y + 4, x, y + 8, TFT_DARKGREY);
+    }
+    
+    // Draw sulking lines
+    if (boyfriend.isSulking) {
+        // Three vertical lines (one longer)
+        canvas.drawLine(x - 6, y - 8, x - 6, y - 2, TFT_BLUE);
+        canvas.drawLine(x, y - 10, x, y - 2, TFT_DARKGREY);  // Longer middle line
+        canvas.drawLine(x + 6, y - 8, x + 6, y - 2, TFT_BLUE);
+    }
+}
+
 // Check if pet should die from neglect or old age
 bool checkDeathConditions() {
     unsigned long now = millis();
@@ -290,6 +392,12 @@ bool checkDeathConditions() {
         // Check 15-minute rule for care mistake
         if (now - attentionStartTime > ATTENTION_TIMEOUT && needsAttentionCare) {
             boyfriend.incrementCareMistake();
+            
+            // Adults and teens sulk instead of getting sick from care mistakes
+            if (boyfriend.stage == STAGE_ADULT || boyfriend.stage == STAGE_TEEN) {
+                boyfriend.startSulking();
+            }
+            
             needsAttentionCare = false;
         }
     } else {
@@ -312,6 +420,12 @@ bool checkDeathConditions() {
         // Check 15-minute rule for care mistake
         if (now - attentionStartTime > ATTENTION_TIMEOUT && needsAttentionCare) {
             boyfriend.incrementCareMistake();
+            
+            // Adults and teens sulk instead of getting sick from care mistakes
+            if (boyfriend.stage == STAGE_ADULT || boyfriend.stage == STAGE_TEEN) {
+                boyfriend.startSulking();
+            }
+            
             needsAttentionCare = false;
         }
     } else {
@@ -321,18 +435,39 @@ bool checkDeathConditions() {
         }
     }
     
-    // Sick from too much poop
-    if (boyfriend.isSick) {
+    // Sick from too much poop or toothache
+    if (boyfriend.isSick || boyfriend.hasToothache) {
         if (energyCriticalTime == 0) {
             energyCriticalTime = now;
-        } else if (now - energyCriticalTime > DEATH_THRESHOLD) {
-            return true;  // Died from sickness
+        } else if (now - energyCriticalTime > SICKNESS_DEATH_THRESHOLD) {
+            return true;  // Died from untreated sickness (90 minutes)
         }
     } else {
         energyCriticalTime = 0;
     }
     
     return false;
+}
+
+// Update sickness system - check sulking, toothache, snack streaks
+void updateSicknessSystem() {
+    unsigned long now = millis();
+    
+    // Check sulking status (auto-recovery or running away)
+    if (boyfriend.isSulking) {
+        boyfriend.checkSulking();
+    }
+    
+    // Reset snack streak if enough time has passed (1 hour without eating)
+    if (lastSnackTime > 0 && (now - lastSnackTime > 3600000)) {  // 1 hour
+        boyfriend.resetSnackStreak();
+        lastSnackTime = 0;
+    }
+    
+    // If sick or has toothache, set medicineNeeded if not already set
+    if ((boyfriend.isSick || boyfriend.hasToothache) && boyfriend.medicineNeeded == 0) {
+        boyfriend.medicineNeeded = (boyfriend.hasToothache ? 1 : 2);  // Toothache=1 dose, Sick=2 doses
+    }
 }
 
 // Reset pet to initial state
@@ -352,6 +487,15 @@ void resetPet() {
     boyfriend.isSick = false;
     boyfriend.stage = STAGE_BABY;
     boyfriend.lightsOn = true;
+    
+    // Reset sickness system
+    boyfriend.hasToothache = false;
+    boyfriend.isSulking = false;
+    boyfriend.snackStreak = 0;
+    boyfriend.medicineNeeded = 0;
+    boyfriend.sulkStartTime = 0;
+    lastSnackTime = 0;
+    lastMedicineTime = 0;
     
     // Clear death tracking
     hungerCriticalTime = 0;

@@ -3,80 +3,136 @@
 /**
  * MINIGAME: Jump Over Obstacles
  * 
- * Objective: Time your jumps to avoid obstacles moving from right to left
+ * Objective: Time your jumps to avoid obstacles
  * Controls: Button A or B = Jump
- * Game Over: If you hit an obstacle
- * Scoring: +1 point per obstacle passed, +1 happiness per obstacle
- * 
- * Physics:
- * - Jump arc: 25 pixels high, 20 frames total (10 up, 10 down)
- * - Obstacle speed: 3 pixels/frame
- * - Collision: if player Y >= ground-10 when obstacle passes
+ * Game Over: If you hit an obstacle 3 times
+ * Scoring: +1 point per obstacle passed
  */
 
 void handleMinigameJump() {
-    // Display score
+    static bool isJumping = false;
+    static int jumpProgress = 0;
+    static int lives = 3;
+    static int hitAnimTimer = 0;
+    static bool showInstructions = true;
+    static int speedIncrease = 0;
+    
+    unsigned long elapsed = millis() - stateStartTime;
+    
+    // Show instructions for first 3 seconds
+    if (elapsed < 3000 && showInstructions) {
+        canvas.setTextColor(TFT_YELLOW, TFT_BLACK);
+        canvas.setTextSize(2);
+        canvas.setCursor(25, 25);
+        canvas.print("JUMP!");
+        canvas.setTextSize(1);
+        canvas.setTextColor(TFT_WHITE, TFT_BLACK);
+        canvas.setCursor(15, 45);
+        canvas.print("Avoid the spikes!");
+        canvas.setCursor(10, canvas.height() - 15);
+        canvas.setTextColor(TFT_DARKGREY, TFT_BLACK);
+        canvas.print("A or B:Jump");
+        return;
+    }
+    showInstructions = false;
+    
+    // Display score & lives
     canvas.setTextColor(TFT_CYAN, TFT_BLACK);
     canvas.setCursor(5, 5);
     canvas.printf("Score: %d", gameScore);
     
-    // Ground level and jump parameters
+    // Draw lives as hearts
+    for (int i = 0; i < lives; i++) {
+        canvas.setTextColor(TFT_RED, TFT_BLACK);
+        canvas.setCursor(canvas.width() - 30 + (i * 10), 5);
+        canvas.print("\x03");
+    }
+    
     int groundY = canvas.height() - 20;
-    int jumpHeight = 25;
-    static bool isJumping = false;
-    static int jumpProgress = 0;  // 0-20: jump animation progress
+    int jumpHeight = 28;
     int playerY = groundY;
     
-    // Calculate jump arc (parabolic motion)
+    // Calculate smooth jump arc (parabolic)
     if (isJumping) {
         jumpProgress++;
-        if (jumpProgress < 10) {
-            // Ascending: linear increase
-            playerY = groundY - (jumpProgress * jumpHeight / 10);
-        } else if (jumpProgress < 20) {
-            // Descending: linear decrease
-            playerY = groundY - ((20 - jumpProgress) * jumpHeight / 10);
-        } else {
-            // Jump complete
+        float t = jumpProgress / 20.0;  // Normalize to 0-1
+        // Parabolic arc: y = -4h(t)(t-1)
+        playerY = groundY - (int)(4 * jumpHeight * t * (1 - t));
+        
+        if (jumpProgress >= 20) {
             isJumping = false;
             jumpProgress = 0;
         }
     }
     
-    // Draw player (green square)
-    canvas.fillRect(playerX - 2, playerY - 5, 5, 5, TFT_GREEN);
+    // Draw ground line
+    canvas.drawLine(0, groundY + 5, canvas.width(), groundY + 5, TFT_GREEN);
     
-    // Draw obstacle (red rectangle moving left)
-    canvas.fillRect(objectX, groundY - 8, 6, 8, TFT_RED);
+    // Draw player character (animated)
+    int rotation = isJumping ? (jumpProgress * 18) : 0;  // Rotate while jumping
+    canvas.fillCircle(playerX, playerY, 4, TFT_WHITE);
+    canvas.fillCircle(playerX - 2, playerY - 1, 1, TFT_BLACK);  // Eye
+    canvas.fillCircle(playerX + 2, playerY - 1, 1, TFT_BLACK);
     
-    // Move obstacle left
-    objectX += 3;
+    // Running animation (legs)
+    if (!isJumping) {
+        int legAnim = (millis() / 100) % 4;
+        canvas.drawLine(playerX - 2, playerY + 4, playerX - 3, playerY + 7, TFT_WHITE);
+        canvas.drawLine(playerX + 2, playerY + 4, playerX + 3, playerY + 7, TFT_WHITE);
+    }
     
-    // Collision detection
-    if (objectX > playerX - 8 && objectX < playerX + 8) {
-        if (playerY >= groundY - 10) {
-            // Hit! Game over
-            currentState = STATE_MINIGAME_RESULT;
-            stateStartTime = millis();
-            gameActive = false;
-            M5.Speaker.tone(300, 100);  // Sad beep
-            return;
+    // Draw spiky obstacle (animated)
+    int spikeColor = (hitAnimTimer > 0) ? TFT_ORANGE : TFT_RED;
+    canvas.fillRect(objectX, groundY - 6, 8, 8, spikeColor);
+    // Draw spikes on top
+    canvas.fillTriangle(objectX, groundY - 6, objectX + 4, groundY - 10, objectX + 8, groundY - 6, spikeColor);
+    
+    // Move obstacle (speed increases over time)
+    speedIncrease = gameScore / 3;  // Gets faster every 3 points
+    objectX -= (2 + speedIncrease);
+    
+    // Collision detection (more forgiving hitbox)
+    if (objectX > playerX - 6 && objectX < playerX + 2) {
+        if (playerY >= groundY - 8) {
+            // Hit!
+            lives--;
+            hitAnimTimer = 20;
+            M5.Speaker.tone(300, 100);
+            
+            // Reset obstacle position
+            objectX = canvas.width() + 20;
+            
+            if (lives <= 0) {
+                // Game over
+                currentState = STATE_MINIGAME_RESULT;
+                stateStartTime = millis();
+                gameActive = false;
+                return;
+            }
         }
     }
     
     // Obstacle passed successfully
-    if (objectX > canvas.width()) {
-        objectX = 0;  // Reset to left side
+    if (objectX < -10) {
+        objectX = canvas.width() + 20;
         gameScore++;
         boyfriend.updateHappiness(1);
-        M5.Speaker.tone(1200, 30);  // Success beep
+        M5.Speaker.tone(1200 + (gameScore * 50), 40);
     }
     
-    // Jump input (either button works)
-    if ((M5.BtnA.wasPressed() || M5.BtnB.wasPressed()) && !isJumping) {
+    // Hit animation (flash)
+    if (hitAnimTimer > 0) {
+        if (hitAnimTimer % 4 < 2) {
+            canvas.fillCircle(playerX, playerY, 5, TFT_RED);
+        }
+        hitAnimTimer--;
+    }
+    
+    // Jump input
+    if ((M5.BtnA.wasPressed() || M5.BtnB.wasPressed()) && !isJumping && playerY >= groundY - 2) {
         isJumping = true;
         jumpProgress = 0;
-        M5.Speaker.tone(1000, 50);  // Jump sound
+        M5.Speaker.tone(1000, 50);
     }
     
     // Show controls

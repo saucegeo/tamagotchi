@@ -26,6 +26,13 @@ Boyfriend::Boyfriend(bool _sleeping, int _sleep, int _happiness, int _hunger,
   isSick = false;       // Healthy start
   stage = STAGE_BABY;   // Start as baby
   lightsOn = true;      // Lights on by default
+  
+  // Initialize sickness system
+  hasToothache = false; // No toothache
+  isSulking = false;    // Not sulking
+  snackStreak = 0;      // No snacks eaten yet
+  medicineNeeded = 0;   // No medicine needed
+  sulkStartTime = 0;    // Not sulking
 }
 
 // Toggle sleep state (no immediate EEPROM write to prevent flickering)
@@ -151,12 +158,25 @@ void Boyfriend::loadFromEEPROM() {
   isSick = EEPROM.read(11);
   stage = (LifeStage)EEPROM.read(12);
   lightsOn = EEPROM.read(13);
+  hasToothache = EEPROM.read(14);
+  isSulking = EEPROM.read(15);
+  snackStreak = EEPROM.read(16);
+  medicineNeeded = EEPROM.read(17);
   
   // Validate loaded values and set defaults if corrupted
   if (sleep > 24) sleep = 8;
   if (happiness > 4) happiness = 4;
   if (hunger > 4) hunger = 4;
   if (energy > 24) energy = 12;
+  if (hasToothache > 1) hasToothache = false;  // Validate boolean
+  if (isSulking > 1) isSulking = false;        // Validate boolean
+  if (snackStreak > 30) snackStreak = 0;       // Cap snack streak
+  if (medicineNeeded > 5) medicineNeeded = 0;  // Cap at 5 doses, reset if corrupted
+  
+  // If sickness flags are clear but medicineNeeded is set, reset it
+  if (!isSick && !hasToothache && medicineNeeded > 0) {
+    medicineNeeded = 0;
+  }
   if (mood > 3) mood = 0;
   if (weight > 99) weight = 10;
   if (discipline > 100) discipline = 0;
@@ -179,6 +199,100 @@ void Boyfriend::saveToEEPROM() {
   EEPROM.write(11, isSick);
   EEPROM.write(12, (int)stage);
   EEPROM.write(13, lightsOn);
+  EEPROM.write(14, hasToothache);
+  EEPROM.write(15, isSulking);
+  EEPROM.write(16, snackStreak);
+  EEPROM.write(17, medicineNeeded);
 
   EEPROM.commit();
+}
+
+// ===== SICKNESS SYSTEM METHODS =====
+
+// Track snack eating for toothache (15 consecutive = toothache)
+void Boyfriend::eatSnack() {
+  // Don't track for babies (they can't get toothaches)
+  if (stage == STAGE_BABY || stage == STAGE_EGG) {
+    return;
+  }
+  
+  snackStreak++;
+  checkToothache();
+}
+
+// Reset snack streak (called after time passes without snacks)
+void Boyfriend::resetSnackStreak() {
+  snackStreak = 0;
+}
+
+// Check if should get toothache from too many snacks (increased to 20 for less frequent)
+void Boyfriend::checkToothache() {
+  if (snackStreak >= 20 && stage != STAGE_BABY && stage != STAGE_EGG) {
+    hasToothache = true;
+    medicineNeeded = 1;  // Toothache needs 1 dose to cure
+    snackStreak = 0;  // Reset counter
+  }
+}
+
+// Give one dose of medicine to cure sickness
+void Boyfriend::giveMedicine() {
+  if (medicineNeeded > 0) {
+    medicineNeeded--;
+    
+    // If all doses given, cure the sickness
+    if (medicineNeeded == 0) {
+      isSick = false;
+      hasToothache = false;
+    }
+  }
+}
+
+// Start sulking from care mistake (adults only on most releases)
+void Boyfriend::startSulking() {
+  // Only adults can sulk (or children on 4U/4U+, but we'll keep it adult-only)
+  if (stage == STAGE_ADULT || stage == STAGE_TEEN) {
+    isSulking = true;
+    sulkStartTime = millis();
+  }
+}
+
+// Stop sulking
+void Boyfriend::endSulking() {
+  isSulking = false;
+  sulkStartTime = 0;
+}
+
+// Check sulking status (auto-recovery or running away)
+void Boyfriend::checkSulking() {
+  if (!isSulking) return;
+  
+  unsigned long sulkDuration = millis() - sulkStartTime;
+  
+  // Auto-recovery after 5 minutes
+  if (sulkDuration > 300000) {  // 5 minutes
+    endSulking();
+  }
+  
+  // Run away if sulking for too long (15 minutes)
+  // This should trigger death/run away state in main game loop
+  // For now we'll just end sulking to prevent permanent lock
+  if (sulkDuration > 900000) {  // 15 minutes
+    endSulking();
+    // Game logic should handle running away
+  }
+}
+
+// Check if can eat (only seriously sick blocks eating)
+bool Boyfriend::canEat() {
+  return !isSick;  // Only serious sickness blocks eating
+}
+
+// Check if can play games (only seriously sick blocks playing)
+bool Boyfriend::canPlay() {
+  return !isSick;  // Only serious sickness blocks playing
+}
+
+// Check if can use items (only seriously sick blocks items)
+bool Boyfriend::canUseItems() {
+  return !isSick;  // Only serious sickness blocks items
 }

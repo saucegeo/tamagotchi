@@ -18,6 +18,13 @@ void handleMinigameMenu() {
     canvas.print("MENU");
     canvas.setTextSize(1);
     
+    // Show warning if sick (but still allow playing)
+    if (!boyfriend.canPlay()) {
+        canvas.setTextColor(TFT_RED, TFT_BLACK);
+        canvas.setCursor(80, 12);
+        canvas.print("SICK!");
+    }
+    
     // Display options based on scroll position
     const char* menuOptions[] = {
         "CATCH", "JUMP", "FORTUNE", 
@@ -86,12 +93,12 @@ void handleMinigameMenu() {
                 M5.Speaker.tone(800, 50);
                 break;
         }
-        M5.Speaker.tone(1200, 50);
+        M5.Speaker.tone(1600, 50);  // Exciting sound for starting game
     } else if (M5.BtnB.wasPressed()) {
         // Cycle through options
         minigameSelection++;
         if (minigameSelection >= numOptions) minigameSelection = 0;
-        M5.Speaker.tone(1000, 30);
+        M5.Speaker.tone(1100, 30);  // Menu navigation beep
     }
     
     // Long press B to go back (alternative quick exit)

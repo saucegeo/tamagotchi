@@ -3,7 +3,7 @@
 /**
  * EATING STATE: Shows animation of pet eating food
  * 
- * Duration: 2 seconds
+ * Duration: 2 seconds with animated eating sequence
  * Auto-transition: Returns to IDLE after animation completes
  */
 
@@ -11,22 +11,54 @@ void handleEatingState() {
     int centerX = canvas.width() / 2 + 30;
     int centerY = canvas.height() / 2 + 10;
     
-    // Draw happy eating face
-    canvas.fillCircle(centerX, centerY, 21, TFT_WHITE);
-    canvas.drawLine(centerX - 8, centerY - 5, centerX - 4, centerY - 7, TFT_BLACK);  // Left eye
-    canvas.drawLine(centerX + 4, centerY - 7, centerX + 8, centerY - 5, TFT_BLACK);  // Right eye
-    canvas.drawArc(centerX, centerY + 3, 8, 6, 180, 360, TFT_BLACK);                // Smile
+    unsigned long elapsed = millis() - stateStartTime;
+    int frame = (elapsed / 200) % 10;  // 10 frames over 2 seconds
     
-    // Draw food (apple)
-    canvas.fillCircle(centerX - 25, centerY - 10, 5, TFT_RED);
+    // Animate character eating
+    drawCharacter(centerX, centerY, false);
     
-    // "YUM!" text
-    canvas.setTextColor(TFT_YELLOW, TFT_BLACK);
-    canvas.setCursor(centerX - 30, centerY + 15);
-    canvas.print("YUM!");
+    // Animate opening/closing mouth (chomping)
+    if (frame % 2 == 0 && elapsed < 1500) {
+        // Draw open mouth exaggerated
+        canvas.fillCircle(centerX, centerY + 8, 6, TFT_BLACK);
+    }
+    
+    // Animate food moving toward mouth
+    if (elapsed < 1500) {
+        int foodX = centerX - 30 + (frame * 2);
+        int foodY = centerY - 10 + (frame / 2);
+        
+        // Draw food (alternates between meal and snack)
+        if (boyfriend.happiness > boyfriend.hunger) {
+            // Was a snack (candy)
+            canvas.fillCircle(foodX, foodY, 5, TFT_PINK);
+            canvas.fillCircle(foodX - 2, foodY - 1, 2, TFT_RED);
+            canvas.fillCircle(foodX + 2, foodY + 1, 2, TFT_RED);
+        } else {
+            // Was a meal (apple)
+            canvas.fillCircle(foodX, foodY, 6, TFT_RED);
+            canvas.fillRect(foodX - 1, foodY - 8, 2, 3, TFT_GREEN);  // Stem
+        }
+    }
+    
+    // Happy sparkles appear after eating
+    if (elapsed > 1500) {
+        canvas.setTextColor(TFT_YELLOW, TFT_BLACK);
+        canvas.setTextSize(2);
+        canvas.setCursor(centerX - 35, centerY - 20);
+        canvas.print("♥");
+        canvas.setCursor(centerX + 20, centerY - 25);
+        canvas.print("♥");
+        
+        canvas.setTextSize(1);
+        canvas.setTextColor(TFT_GREEN, TFT_BLACK);
+        canvas.setCursor(centerX - 20, centerY + 20);
+        canvas.print("YUM!");
+    }
     
     // Return to idle after 2 seconds
-    if (millis() - stateStartTime > 2000) {
+    if (elapsed > 2000) {
         currentState = STATE_IDLE;
+        M5.Speaker.tone(1800, 50);  // Happy beep
     }
 }

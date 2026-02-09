@@ -5,81 +5,183 @@
 /**
  * MINIGAME: Dance Music
  * 
- * Objective: Make the boyfriend dance to music
- * Controls: None - just watch him dance! Button A or B to exit
+ * Objective: Watch boyfriend dance to music!
+ * Controls: Press buttons to change dance moves! Button hold to exit
  * Scoring: +3 happiness, -2 energy for dancing
- * 
- * Physics: Simple bouncing and rotating animation, RTTTL music playback
  */
 
 void handleDanceMusic() {
     static RTTTL rtttlPlayer;
-    static Note currentNote = {0, 0};  // Initialize with zero frequency and duration
+    static Note currentNote = {0, 0};
     static unsigned long noteStartTime = 0;
     static bool noteActive = false;
     static int currentSongIndex = -1;
     static bool initialized = false;
+    static int danceMove = 0;  // Different dance animations
+    static int noteParticles[8] = {0};  // Music note particles
+    static bool showingSongName = true;
+    static const char* songNames[] = {
+        "Misato", "Cruel Angel", "Pokemon",
+        "Mario", "Zelda", "Tetris",
+        "Spirited", "Totoro", "No Scrubs", "Yeah"
+    };
     
     int centerX = canvas.width() / 2 + 30;
     int centerY = canvas.height() / 2 + 10;
+    unsigned long elapsed = millis() - stateStartTime;
     
-    // Initialize song on first entry
+    // Initialize song
     if (!initialized) {
         currentSongIndex = random(0, DANCE_SONG_COUNT);
         rtttlPlayer.begin(DANCE_SONGS[currentSongIndex]);
         noteActive = false;
         noteStartTime = millis();
         initialized = true;
+        showingSongName = true;
     }
+    
+    // Show song name for first 3 seconds
+    if (elapsed < 3000 && showingSongName) {
+        canvas.setTextColor(TFT_MAGENTA, TFT_BLACK);
+        canvas.setTextSize(2);
+        canvas.setCursor(10, 25);
+        canvas.print("NOW PLAYING");
+        canvas.setTextSize(1);
+        canvas.setTextColor(TFT_YELLOW, TFT_BLACK);
+        canvas.setCursor(15, 45);
+        canvas.print(songNames[currentSongIndex]);
+        
+        // Equalizer bars animation
+        for (int i = 0; i < 5; i++) {
+            int barHeight = 5 + ((elapsed + i * 100) / 100 % 15);
+            canvas.fillRect(15 + i * 20, 60, 10, barHeight, TFT_GREEN);
+        }
+        return;
+    }
+    showingSongName = false;
     
     // Handle music playback
     unsigned long now = millis();
     if (!noteActive || (now - noteStartTime >= (unsigned long)currentNote.duration)) {
-        // Get next note
         if (rtttlPlayer.getNextNote(currentNote)) {
             if (currentNote.frequency > 0) {
                 M5.Speaker.tone(currentNote.frequency, currentNote.duration);
+                
+                // Spawn music note particle on beat
+                for (int i = 0; i < 8; i++) {
+                    if (noteParticles[i] == 0) {
+                        noteParticles[i] = 1;
+                        break;
+                    }
+                }
             } else {
                 M5.Speaker.stop();
             }
             noteActive = true;
             noteStartTime = now;
         } else {
-            // Song finished, restart it
+            // Song finished, restart
             rtttlPlayer.reset();
             noteActive = false;
         }
     }
     
-    // Animated dancing character
-    int bounceOffset = (millis() - stateStartTime) % 400 < 200 ? -8 : 8;
-    int rotateOffset = (millis() - stateStartTime) % 800 < 400 ? -5 : 5;
+    // Dance animation synced to music tempo
+    int beatPhase = (elapsed / 200) % 4;
+    int bounceOffset = 0;
+    int rotateOffset = 0;
+    int armOffset = 0;
     
-    canvas.fillCircle(centerX + rotateOffset, centerY + bounceOffset, 20, TFT_WHITE);
-    canvas.fillCircle(centerX - 6, centerY + bounceOffset - 5, 3, TFT_BLACK);
-    canvas.fillCircle(centerX + 6, centerY + bounceOffset - 5, 3, TFT_BLACK);
-    canvas.drawArc(centerX, centerY + bounceOffset + 5, 8, 6, 180, 360, TFT_BLACK);
+    switch(danceMove) {
+        case 0:  // Bounce dance
+            bounceOffset = (beatPhase < 2) ? -8 : 4;
+            break;
+        case 1:  // Spin dance
+            rotateOffset = (beatPhase - 2) * 3;
+            bounceOffset = abs(beatPhase - 2) * -2;
+            break;
+        case 2:  // Wave dance
+            armOffset = (beatPhase < 2) ? -6 : 6;
+            bounceOffset = -4;
+            break;
+    }
     
-    // Music notes animation
-    int noteY = centerY - ((millis() - stateStartTime) / 100 % 30);
+    // Draw dancing character
+    canvas.fillCircle(centerX + rotateOffset, centerY + bounceOffset, 18, TFT_WHITE);
+    
+    // Happy eyes (stars when really dancing)
+    if (currentNote.frequency > 1500) {
+        canvas.setTextColor(TFT_YELLOW, TFT_WHITE);
+        canvas.setCursor(centerX - 8 + rotateOffset, centerY - 6 + bounceOffset);
+        canvas.print("*");
+        canvas.setCursor(centerX + 2 + rotateOffset, centerY - 6 + bounceOffset);
+        canvas.print("*");
+    } else {
+        canvas.fillCircle(centerX - 5 + rotateOffset, centerY - 4 + bounceOffset, 2, TFT_BLACK);
+        canvas.fillCircle(centerX + 5 + rotateOffset, centerY - 4 + bounceOffset, 2, TFT_BLACK);
+    }
+    
+    // Big smile
+    canvas.drawArc(centerX + rotateOffset, centerY + bounceOffset + 2, 10, 8, 180, 360, TFT_BLACK);
+    
+    // Arms waving
+    canvas.drawLine(centerX - 18 + rotateOffset, centerY + bounceOffset - armOffset, 
+                    centerX - 14 + rotateOffset, centerY + bounceOffset + 8 - armOffset, TFT_WHITE);
+    canvas.drawLine(centerX + 18 + rotateOffset, centerY + bounceOffset + armOffset,
+                    centerX + 14 + rotateOffset, centerY + bounceOffset + 8 + armOffset, TFT_WHITE);
+    
+    // Music note particles floating up
+    for (int i = 0; i < 8; i++) {
+        if (noteParticles[i] > 0) {
+            int noteY = canvas.height() - (noteParticles[i] * 3);
+            int noteX = 20 + (i * 15);
+            canvas.setTextColor((i % 2) ? TFT_MAGENTA : TFT_CYAN, TFT_BLACK);
+            canvas.setCursor(noteX, noteY);
+            canvas.print((i % 3 == 0) ? "o" : "*");
+            noteParticles[i]++;
+            if (noteParticles[i] > 25) noteParticles[i] = 0;
+        }
+    }
+    
+    // Title
     canvas.setTextColor(TFT_MAGENTA, TFT_BLACK);
-    canvas.setTextSize(2);
-    canvas.setCursor(centerX - 30, noteY);
-    canvas.print("♪");
-    canvas.setCursor(centerX + 25, noteY - 10);
-    canvas.print("♫");
-    canvas.setTextSize(1);
+    canvas.setCursor(5, 5);
+    canvas.printf("%s", songNames[currentSongIndex]);
     
-    canvas.setTextColor(TFT_YELLOW, TFT_BLACK);
-    canvas.setCursor(20, 20);
-    canvas.print("DANCING!");
+    // Time remaining
+    int timeLeft = (15000 - elapsed) / 1000;
+    canvas.setTextColor(TFT_CYAN, TFT_BLACK);
+    canvas.setCursor(canvas.width() - 20, 5);
+    canvas.printf("%ds", timeLeft);
     
-    // End after 15 seconds or button press
-    if (millis() - stateStartTime > 15000 || M5.BtnA.wasPressed() || M5.BtnB.wasPressed()) {
+    // Change dance move on button press
+    if (M5.BtnA.wasPressed()) {
+        danceMove = (danceMove + 1) % 3;
+        M5.Speaker.tone(1500, 30);
+    }
+    
+    // Skip to next song
+    if (M5.BtnB.wasPressed()) {
+        currentSongIndex = (currentSongIndex + 1) % DANCE_SONG_COUNT;
+        rtttlPlayer.begin(DANCE_SONGS[currentSongIndex]);
+        M5.Speaker.tone(1200, 30);
+        showingSongName = true;
+        stateStartTime = millis();  // Reset timer for new song
+    }
+    
+    canvas.setTextColor(TFT_DARKGREY, TFT_BLACK);
+    canvas.setCursor(5, canvas.height() - 10);
+    canvas.print("A:Dance B:Skip HoldB:Exit");
+    
+    // End after 15 seconds or hold B
+    if (elapsed > 15000 || M5.BtnB.pressedFor(800)) {
         M5.Speaker.stop();
-        initialized = false;  // Reset for next time
+        initialized = false;
         boyfriend.updateHappiness(3);
         boyfriend.updateEnergy(-2);
         currentState = STATE_IDLE;
+        
+        // Clear particles
+        for (int i = 0; i < 8; i++) noteParticles[i] = 0;
     }
 }
