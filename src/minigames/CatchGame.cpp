@@ -52,10 +52,10 @@ void handleMinigameCatch() {
     
     // Draw falling heart (animated)
     int heartPulse = (millis() / 150) % 2;
-    canvas.setTextColor(TFT_RED, TFT_BLACK);
+    canvas.setTextColor(TFT_RED, TFT_WHITE);
     canvas.setTextSize(2 + heartPulse);
     canvas.setCursor(objectX - 5, objectY);
-    canvas.print("\x03");  // Heart symbol
+    canvas.print("<3");  // Heart symbol
     canvas.setTextSize(1);
     
     // Update object position (gravity with slight acceleration)
