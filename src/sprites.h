@@ -19,6 +19,13 @@ enum LifeStage {
   STAGE_ADULT = 4
 };
 
+enum CharacterOutfit {
+  OUTFIT_CASUAL = 0,
+  OUTFIT_FORMAL = 1,
+  OUTFIT_SPORTS = 2,
+  OUTFIT_SLEEPWEAR = 3
+};
+
 class Boyfriend {
 public:
   // Constructor: Initializes Boyfriend with starting values
@@ -84,6 +91,9 @@ public:
   // Load/Save: Restore or backup all state from EEPROM
   void loadFromEEPROM();  // Load saved values on startup
   void saveToEEPROM();    // Save current state
+
+  CharacterOutfit currOutfit;
+  void nextOutfit(); // Cycle the next outfits
 };
 
 #endif  // End include guard
