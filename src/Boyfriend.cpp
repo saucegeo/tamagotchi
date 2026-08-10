@@ -1,13 +1,11 @@
 /*
- * Boyfriend.cpp - Implementation file for Boyfriend virtual pet class.
- * Inspired by Alegotchi, adapted for Boyfriend Bot theme.
- * Created for Arduino Tamagotchi project.
- * Released into the public domain.
+ * Boyfriend.cpp - Implementation file for Boyfriend virtual pet class
+ * Inspired by Alegotchi project
  */
 
-#include "sprites.h"
+#include "Boyfriend.h"
 
-// Constructor: Initialize Boyfriend with default or provided values
+// Default constructor
 Boyfriend::Boyfriend(bool _sleeping, int _sleep, int _happiness, int _hunger, 
                int _energy, int _age, int _mood) {
   sleeping = _sleeping;

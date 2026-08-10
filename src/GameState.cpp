@@ -67,7 +67,7 @@ const char* fortuneMessages[] = {
     "Do the best you can until you know better. Then when you know better, do better. \n - Maya Angelou",
     "A year from now you may wish you had started today. \n - Karen Lamb"
 };
-const int FORTUNE_MESSAGE_COUNT = 8;
+const int FORTUNE_MESSAGE_COUNT = 5; // Number of messages
 
 // Special days - defined here
 const int SPECIAL_DAY_COUNT = 3;
