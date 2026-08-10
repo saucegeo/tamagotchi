@@ -1,12 +1,6 @@
 #include "GameState.h"
 
-// ===== GLOBAL VARIABLE DEFINITIONS =====
-// These are declared as "extern" in GameState.h, now we allocate memory for them
-
-// Core game objects (canvas is defined in main.cpp, boyfriend in main.cpp)
-// Note: canvas and boyfriend are defined in main.cpp to keep hardware init there
-
-// State machine
+// State machine to track the game states
 int minigameSelection = 0;
 int playerX = 60;
 int objectX = 0;
@@ -14,7 +8,7 @@ int objectY = 0;
 int gameScore = 0;
 bool gameActive = false;
 
-// Sensor state
+// Sensor state of the M5Stack ESP-32 S3 board
 float accelX = 0, accelY = 0, accelZ = 0;
 float gyroX = 0, gyroY = 0, gyroZ = 0;
 bool isFlat = false;
@@ -22,7 +16,7 @@ bool isTiltedUp = false;
 int shakeCount = 0;
 int micLevel = 0;
 
-// Special features state
+// Special features state for minigames
 int roomMess = 0;
 int fortuneIndex = 0;
 int heartLevel = 0;
@@ -58,22 +52,20 @@ int consecutiveSnacks = 0;
 const unsigned long ATTENTION_COOLDOWN = 10000;  // 10 seconds
 const unsigned long DEATH_THRESHOLD = 7200000;    // 2 hours in critical condition = death
 const unsigned long SICKNESS_DEATH_THRESHOLD = 5400000; // 90 minutes sick without medicine = death
-const int MAX_AGE = 99;                          // Maximum age before death from old age
+const int MAX_AGE = 100;                          // Maximum age before death from old age
 const unsigned long BABY_TO_CHILD_TIME = 3900000; // 65 minutes
 const unsigned long ATTENTION_TIMEOUT = 900000;  // 15 minutes before care mistake
 const unsigned long POOP_INTERVAL_BABY = 900000; // 15 minutes for baby first poop
 const unsigned long POOP_INTERVAL_NORMAL = 10800000; // 3 hours
 
-// Fortune cookie messages
+// Fortune cookie custom messages
+// Board reads list of character until we reach \0 (end of line)
 const char* fortuneMessages[] = {
-    "Love grows when you listen",
-    "Small gestures mean everything",
-    "Your patience will be rewarded",
-    "Adventure awaits together",
-    "Laughter is your best gift",
-    "Trust deepens with time",
-    "Kindness returns tenfold",
-    "Your presence is enough"
+    "Believe you can and you're halfway there. \n - Theodore Roosevelt",
+    "Dont count the days, make the days count. \n - Muhammad Ali",
+    "To begin, begin. \n - William Wordsworth",
+    "Do the best you can until you know better. Then when you know better, do better. \n - Maya Angelou",
+    "A year from now you may wish you had started today. \n - Karen Lamb"
 };
 const int FORTUNE_MESSAGE_COUNT = 8;
 
