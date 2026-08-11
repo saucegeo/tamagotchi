@@ -1,14 +1,11 @@
 #ifndef SONGS_H
 #define SONGS_H
 
-/**
- * Collection of RTTTL songs for background music and minigames
- * Format: name:d=duration,o=octave,b=bpm:notes
- */
 
-// Background music for idle/menu (calm, looping elevator music)
+
+
 inline const char* BACKGROUND_MUSIC[] = {
-    // Gentle looping melodies
+
     "TamaTheme:d=4,o=5,b=160:8c6,8e6,8g6,8e6,8c6,8e6,2g6,8a6,8g6,8e6,8c6,2d6,8c6,8e6,8g6,8e6,8c6,8e6,2g6,8f6,8e6,8d6,8c6,2c6",
     "Gentle:d=4,o=5,b=120:8g,8a,8b,8g,8a,8b,8c6,8b,8a,8g,8f,8e,8d,8e,8f,8g,2g,8g,8a,8b,8g,8a,8b,8c6,8b,8a,8g,2g",
     "Peaceful:d=4,o=5,b=100:8c,8d,8e,8f,8g,8a,8g,8f,8e,8d,8c,8d,2e,8f,8g,8a,8b,8a,8g,8f,8e,8f,2g",
@@ -17,7 +14,7 @@ inline const char* BACKGROUND_MUSIC[] = {
 };
 inline const int BACKGROUND_MUSIC_COUNT = 5;
 
-// Upbeat minigame music
+
 inline const char* MINIGAME_MUSIC[] = {
     "GameStart:d=16,o=6,b=180:c,e,g,c7,8p,c,e,g,c7",
     "Victory:d=8,o=5,b=180:c,e,g,c6,e6,g6,c7,4c7",
@@ -26,9 +23,9 @@ inline const char* MINIGAME_MUSIC[] = {
 };
 inline const int MINIGAME_MUSIC_COUNT = 4;
 
-// Dance songs for DanceMusic minigame
+
 inline const char* DANCE_SONGS[] = {
-    // Anime & Popular themes
+
     "Misato:d=4,o=7,b=200:e,16e.,d,c,8d.,c.,8c.,d,d,e,16e.,d,c,8d.,c.,8c.,d,d,e,16e.,d,c,8d.,c.,8c.,d,d,e,16e.,d,c,8d.,c.,8c.,16d.",
     "Zankoku:d=8,o=6,b=125:4c,4d#,f.,d#.,f,f,f,a#,g#,16g,f,4g.,4g,4a#,c7.,f.,d#,a#,a#,g,a#,a#.,4c7",
     "Pokemon:d=16,o=5,b=112:32p,f,a#,c6,c#6,c6,c#6,d#6,2f6,a#,c6,8c#6,8f6,8d#6,32c#.6,32d#.6,32c#.6,8c6,8g#.,f,a#,c6,c#6,c6,c#6,d#6,2f6,8a#,c#6,8f6,a,d#6,4g#6",
@@ -42,11 +39,11 @@ inline const char* DANCE_SONGS[] = {
 };
 inline const int DANCE_SONG_COUNT = 10;
 
-// Sound effects for interactions
+
 inline const char* SFX_HAPPY = "Happy:d=16,o=6,b=200:c,e,g,c7";
 inline const char* SFX_SAD = "Sad:d=8,o=5,b=100:c,b4,a4,g4";
 inline const char* SFX_BEEP = "Beep:d=32,o=6,b=300:c,p,c";
 inline const char* SFX_SUCCESS = "Success:d=16,o=6,b=180:c,d,e,g,c7";
 inline const char* SFX_FAIL = "Fail:d=8,o=5,b=120:g,f,e,d,c";
 
-#endif // SONGS_H
+#endif
