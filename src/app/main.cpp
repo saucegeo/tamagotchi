@@ -98,7 +98,7 @@ void loop() {
     static unsigned long lastDebugPrint = 0;
     if (now - lastDebugPrint > 2000) {
         Serial.printf("State:%d Flat:%d TiltUp:%d AccZ:%.2f AccY:%.2f BtnA:%d BtnB:%d\n",
-                      currentState, isFlat, isTiltedUp, accelZ, accelY,
+                      currentState, isFlat, isTiltedDown, isTiltedUp, accelZ, accelY,
                       M5.BtnA.isPressed(), M5.BtnB.isPressed());
         lastDebugPrint = now;
     }
@@ -150,12 +150,10 @@ void loop() {
     }
 
 
+    isTiltedDown = (accelY > 0.7);
+    isTiltedUp = (accelY < -0.7);   
 
-
-    isTiltedUp = (accelY < -0.7);
-
-
-    if (isTiltedUp && currentState == STATE_IDLE &&
+    if (isTiltedDown && currentState == STATE_IDLE &&
         (now - lastAutoStateChange > AUTO_STATE_COOLDOWN)) {
         currentState = STATE_STARGAZING;
         stateStartTime = now;
