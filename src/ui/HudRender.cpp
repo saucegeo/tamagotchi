@@ -1,4 +1,5 @@
 #include "HudRender.h"
+#include "hardware/Battery.h"
 #include <M5Unified.h>
 #include "app/GameContext.h"
 #include "content/SpecialDays.h"
@@ -9,8 +10,7 @@ void drawStatsBar() {
     canvas.setTextSize(1);
     canvas.setTextColor(TFT_GREEN, TFT_BLACK);
     canvas.setCursor(5, 5);
-    canvas.printf("Batt:%d%%", M5.Power.getBatteryLevel());
-
+    canvas.printf("Batt:%d%%", (int)batteryLevel); // Convert to int
 
     canvas.setTextColor(TFT_MAGENTA, TFT_BLACK);
     canvas.setCursor(75, 5);

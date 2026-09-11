@@ -1,6 +1,7 @@
 #include <M5Unified.h>
 #include <EEPROM.h>
 #include "app/Game.h"
+#include "hardware/Battery.h"
 
 void setup() {
 
@@ -122,12 +123,8 @@ void loop() {
     }
 }
 
-
-    int batteryLevel = M5.Power.getBatteryLevel();
     bool lowBattery = batteryLevel < 20;
-
-
-
+    updateBattery();
 
     isFlat = (abs(accelZ - 1.0) < 0.2 && abs(accelX) < 0.2 && abs(accelY) < 0.2);
 
