@@ -6,5 +6,5 @@ float accelZ = 0;
 float gyroX = 0;
 float gyroY = 0;
 float gyroZ = 0;
-int micLevel = 0;
+extern int micLevel = 0;
 const unsigned long AUTO_STATE_COOLDOWN = 3000;

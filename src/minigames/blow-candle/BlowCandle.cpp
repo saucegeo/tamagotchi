@@ -1,9 +1,11 @@
 #include "app/Game.h"
-
-
+#include "hardware/Sensors.h"
 
 void handleBlowCandle() {
     const int BLOW_THRESHOLD = 500;
+
+    // Using static means its only instantiated once in memory
+    // We need the variables everytime the minigame starts
     static int blowProgress = 0;
     static bool candleBlownOut = false;
     static unsigned long blowOutTime = 0;
@@ -12,7 +14,7 @@ void handleBlowCandle() {
     int centerY = canvas.height() / 2 + 10;
     unsigned long elapsed = millis() - stateStartTime;
 
-
+    // Minigame title screen
     if (elapsed < 2000) {
         canvas.setTextColor(TFT_YELLOW, TFT_BLACK);
         canvas.setTextSize(2);
@@ -24,6 +26,7 @@ void handleBlowCandle() {
         canvas.print("Blow out candle!");
 
 
+        // The flame on the candle flickers
         int flicker = (millis() / 100) % 3;
         canvas.fillRect(centerX, centerY + 10, 6, 15, TFT_CYAN);
         canvas.fillCircle(centerX + 3, centerY + 7 - flicker, 4, TFT_ORANGE);
@@ -34,7 +37,6 @@ void handleBlowCandle() {
 
     if (candleBlownOut) {
         unsigned long celebTime = millis() - blowOutTime;
-
 
         for (int i = 0; i < 5; i++) {
             int smokeY = centerY - ((celebTime / 50) % 30) - (i * 8);
@@ -59,14 +61,17 @@ void handleBlowCandle() {
 
         if (celebTime > 2500) {
             pet.updateHappiness(4);
-            currentState = STATE_IDLE;
+            // Reset the minigame variables for the next run
+            candleBlownOut = false; 
+            blowProgress = 0;
+            blowOutTime = 0;
+
+              currentState = STATE_IDLE;
         }
         return;
     }
 
-
     drawCharacter(centerX - 25, centerY + 10);
-
 
     int flameSize = 6 - (blowProgress / 5);
     if (flameSize < 1) flameSize = 1;
@@ -129,6 +134,10 @@ void handleBlowCandle() {
     canvas.print("B:Back");
 
     if (M5.BtnB.wasPressed()) {
+        // Reset the minigame variables for the next run
+        candleBlownOut = false; 
+        blowProgress = 0;
+        blowOutTime = 0;
         currentState = STATE_IDLE;
     }
 }

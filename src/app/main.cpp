@@ -4,27 +4,25 @@
 
 void setup() {
 
+    // Enable internal mic in configuratio
     auto cfg = M5.config();
+    cfg.internal_mic = true;
     M5.begin(cfg);
-
 
     Serial.begin(115200);
     Serial.println("\n=== Tamagotchi Starting ===");
 
-
+    // Allocate sample memory
     micSamples = (int16_t*)malloc(SAMPLE_COUNT * sizeof(int16_t));
-
 
     M5.Mic.begin();
 
-
-    pinMode(4, OUTPUT);
-    digitalWrite(4, HIGH);
-
+    // M5.begin(cfg) configures and manages internal hardware pins
+    // pinMode(4, OUTPUT);
+    // digitalWrite(4, HIGH);
 
     M5.Display.setRotation(1);
     M5.Display.setBrightness(100);
-
 
     canvas.setColorDepth(8);
     if (!canvas.createSprite(M5.Display.width(), M5.Display.height())) {
@@ -35,7 +33,6 @@ void setup() {
 
 
     EEPROM.begin(512);
-
 
     uint8_t magicByte = EEPROM.read(100);
     if (magicByte != 0x42) {
@@ -65,23 +62,10 @@ void setup() {
 
     pet.loadFromEEPROM();
 
-
     clockSetTime = millis();
     hatchTime = millis();
 
-
     M5.Imu.begin();
-
-
-    M5.Mic.begin();
-
-
-
-
-
-
-
-
 
 
     Serial.println("=== Setup Complete ===");
@@ -107,12 +91,9 @@ void setup() {
 void loop() {
     unsigned long now = millis();
 
-
     yield();
 
-
     M5.update();
-
 
     static unsigned long lastDebugPrint = 0;
     if (now - lastDebugPrint > 2000) {
@@ -128,14 +109,18 @@ void loop() {
 
 
     if (M5.Mic.isEnabled() && micSamples != nullptr) {
-        M5.Mic.record(micSamples, SAMPLE_COUNT);
-
-        int32_t sum = 0;
-        for (int i = 0; i < SAMPLE_COUNT; i++) {
-            sum += abs(micSamples[i]);
-        }
-        micLevel = sum / SAMPLE_COUNT;
+        // Record at 16000 Hz into micSamples and only update micLevel when new data
+        if (M5.Mic.isEnabled() && micSamples != nullptr) {
+        // Record at 16000 Hz into micSamples. Only update micLevel when new data arrives
+        if (M5.Mic.record(micSamples, SAMPLE_COUNT, 16000)) {
+            int32_t sum = 0;
+            for (int i = 0; i < SAMPLE_COUNT; i++) {
+                sum += abs(micSamples[i]);
+            }
+            micLevel = sum / SAMPLE_COUNT;
+        } 
     }
+}
 
 
     int batteryLevel = M5.Power.getBatteryLevel();
