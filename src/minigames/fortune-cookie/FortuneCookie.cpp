@@ -3,15 +3,22 @@
 #include "app/GameContext.h"
 #include "app/Game.h"
 
+// Calculate array size dynamically
+// Number of messages can grow 
+int totalFortunes = sizeof(fortuneMessages)/sizeof(fortuneMessages[0]);
 
+int randomFortune;
 
-int fortuneIndex = 0;
+// Function handling fortune cookie minigame behavior
 void handleFortuneCookie() {
     static bool cookieCracked = false;
+
+    // keep track of when is the cookie cracked
     static unsigned long crackTime = 0;
 
     int centerX = canvas.width() / 2;
     int centerY = canvas.height() / 2;
+    // Time elapsed for the minigame fortune cookie
     unsigned long elapsed = millis() - stateStartTime;
 
     canvas.setTextColor(TFT_YELLOW, TFT_BLACK);
@@ -20,25 +27,29 @@ void handleFortuneCookie() {
     canvas.print("FORTUNE");
     canvas.setTextSize(1);
 
+    // Run only if the cookie is not cracked
     if (!cookieCracked) {
 
+        // Subtext under the minigame title
         canvas.setTextColor(TFT_WHITE, TFT_BLACK);
         canvas.setCursor(15, 30);
         canvas.print("Press to crack!");
 
-
+        // The fortune cookie shake on the idle screen of the minigame
+        // Draw the fortune cookie
         int wobble = (millis() / 200) % 2;
         canvas.fillCircle(centerX, centerY + wobble, 12, TFT_ORANGE);
         canvas.fillCircle(centerX, centerY + wobble, 10, 0xFDA0);
         canvas.drawArc(centerX, centerY + wobble, 12, 10, 90, 270, TFT_BROWN);
-
-
         canvas.fillCircle(centerX - 4, centerY - 3 + wobble, 2, TFT_YELLOW);
 
+        // Text at the bottom left of the screen
+        // Inform the player both A or B can be used to crack the fortune cookie
         canvas.setTextColor(TFT_DARKGREY, TFT_BLACK);
         canvas.setCursor(10, canvas.height() - 10);
         canvas.print("Press any button");
 
+        // The minigame starts
         if (M5.BtnA.wasPressed() || M5.BtnB.wasPressed()) {
             cookieCracked = true;
             crackTime = millis();
@@ -46,14 +57,14 @@ void handleFortuneCookie() {
             delay(80);
             M5.Speaker.tone(1200, 80);
         }
+    
+    } else { // The cookie is being cracked open
 
-    } else {
+        // Time after the cookie has been cracked (total - crack)
         unsigned long crackElapsed = millis() - crackTime;
-
 
         if (crackElapsed < 1000) {
             int separation = crackElapsed / 20;
-
 
             canvas.fillCircle(centerX - separation, centerY, 10, TFT_ORANGE);
             canvas.fillCircle(centerX + separation, centerY, 10, TFT_ORANGE);
@@ -74,7 +85,7 @@ void handleFortuneCookie() {
             canvas.setCursor(10, 30);
 
 
-            const char* fortune = fortuneMessages[fortuneIndex];
+            const char* fortune = fortuneMessages[randomFortune];
             int lineY = 35;
             int lineWidth = 0;
             int wordStart = 0;
@@ -102,7 +113,7 @@ void handleFortuneCookie() {
                 }
             }
 
-
+            
             if ((crackElapsed / 300) % 2 == 0) {
                 canvas.setTextColor(TFT_YELLOW, TFT_BLACK);
                 canvas.setCursor(5, 25);

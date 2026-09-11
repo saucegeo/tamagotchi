@@ -4,7 +4,6 @@
 #include <Arduino.h>
 
 
-
 struct Note {
     float frequency;
     int duration;

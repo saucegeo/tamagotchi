@@ -63,7 +63,8 @@ void handleMinigameMenu() {
                 break;
             case 2:
                 currentState = STATE_FORTUNE_COOKIE;
-                fortuneIndex = random(0, 8);
+                // Choose one message randomly and output it on screen
+                randomFortune = random(0, totalFortunes);
                 break;
             case 3:
                 currentState = STATE_DANCE_MUSIC;

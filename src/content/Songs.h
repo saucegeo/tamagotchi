@@ -14,7 +14,7 @@ inline const char* BACKGROUND_MUSIC[] = {
 };
 inline const int BACKGROUND_MUSIC_COUNT = 5;
 
-
+// not used yet need to be implemented
 inline const char* MINIGAME_MUSIC[] = {
     "GameStart:d=16,o=6,b=180:c,e,g,c7,8p,c,e,g,c7",
     "Victory:d=8,o=5,b=180:c,e,g,c6,e6,g6,c7,4c7",
@@ -39,7 +39,7 @@ inline const char* DANCE_SONGS[] = {
 };
 inline const int DANCE_SONG_COUNT = 10;
 
-
+// not implemented yet will have to
 inline const char* SFX_HAPPY = "Happy:d=16,o=6,b=200:c,e,g,c7";
 inline const char* SFX_SAD = "Sad:d=8,o=5,b=100:c,b4,a4,g4";
 inline const char* SFX_BEEP = "Beep:d=32,o=6,b=300:c,p,c";
